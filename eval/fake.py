@@ -46,7 +46,8 @@ def fake_run_negotiation(scenario: Scenario, listings: list[Listing], mode: str,
     floor_total = sum(l.floor_price for l in items)
     p_max = min(scenario.budget - target.shipping_cost, list_total)
 
-    reaches_deal = rng.random() < 0.85
+    # Bütçe alt sınırların toplamına yetmiyorsa anlaşma bölgesi yoktur.
+    reaches_deal = rng.random() < 0.85 and p_max >= floor_total
     discount = rng.uniform(0.12, 0.24) if len(items) > 1 else rng.uniform(0.08, 0.18)
     final = min(max(list_total * (1 - discount), floor_total), p_max)
 

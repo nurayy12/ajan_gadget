@@ -3,3 +3,4 @@ __pycache__/
 .pytest_cache/
 eval/results.jsonl
 eval/out/
+.venv/
