@@ -86,3 +86,15 @@ def test_custom_check_fn_replaces_default(monkeypatch):
     result = run_negotiation_llm_only(make_scenario(2000), LISTINGS, "single", check_fn=check)
     assert result.violations.count("benim_ihlalim") == len(seen) == len(result.offers)
     assert "over_budget" not in result.violations
+
+
+def test_three_param_check_fn_is_also_accepted(monkeypatch):
+    # eval/run_experiments.py history'siz 3 parametreli bir uyarlayıcı kullanır
+    calls = []
+
+    def check3(offer, scenario, bundle):
+        calls.append(offer.sender)
+        return []
+
+    result = run_negotiation_llm_only(make_scenario(2000), LISTINGS, "single", check_fn=check3)
+    assert calls and result.violations == []

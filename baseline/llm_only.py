@@ -8,6 +8,7 @@ Paketi buyer.select_bundle seçer; sonuç asıl sistemle aynı şemadadır (Nego
 
 USE_MOCK_LLM=1 iken API çağrılmaz, önceden yazılmış JSON yanıtlar kullanılır.
 """
+import inspect
 import json
 import os
 from typing import Callable, Literal
@@ -157,6 +158,16 @@ def _default_check(offer: Offer, scenario: Scenario, bundle: list[Listing],
     return []
 
 
+def _call_check(check, offer, scenario, bundle, history) -> list[str]:
+    """check_fn 4 parametreliyse (core.rules.check gibi) history'yi de verir, 3 parametreliyse vermez."""
+    params = inspect.signature(check).parameters.values()
+    positional = [p for p in params if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+    varargs = any(p.kind == p.VAR_POSITIONAL for p in inspect.signature(check).parameters.values())
+    if varargs or len(positional) >= 4:
+        return check(offer, scenario, bundle, history)
+    return check(offer, scenario, bundle)
+
+
 # --- Ana fonksiyon -----------------------------------------------------------------------
 
 def run_negotiation_llm_only(
@@ -168,7 +179,7 @@ def run_negotiation_llm_only(
     """Alıcı ve satıcı LLM'i en çok 5 tur konuşturur (her turda önce alıcı).
 
     check_fn(offer, scenario, bundle, history) -> ihlal adları listesi (core.rules.check ile
-    aynı imza; history = bu teklif eklenmeden önceki konuşma). Her geçerli tekliften sonra
+    aynı imza; history parametresi olmayan 3 parametreli fonksiyonlar da kabul edilir; history = bu teklif eklenmeden önceki konuşma). Her geçerli tekliften sonra
     çağrılır; verilmezse over_budget (alıcı) ve below_floor (satıcı) denetimi yapılır.
     Geçersiz yanıtlı ("reject" sayılan) turlar denetlenmez.
     Kabul (accept) teklifinin fiyatı, kabul edilen karşı tarafın son fiyatıdır.
@@ -208,7 +219,7 @@ def run_negotiation_llm_only(
                           price=price, message=turn.message)
             history.append(offer)
             if action != "reject":
-                violations.extend(check(offer, scenario, bundle, history[:-1]))
+                violations.extend(_call_check(check, offer, scenario, bundle, history[:-1]))
             if action == "accept":
                 deal, final_price = True, price
                 break
