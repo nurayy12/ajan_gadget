@@ -58,17 +58,19 @@ def bundle_candidates(scenario: Scenario, listings: list[Listing]) -> list[Listi
 
 
 def bundle_feasible(scenario: Scenario, listings: list[Listing]) -> bool:
-    """Bütçe en küçük pakete (hedef + en ucuz aday) alt sınır fiyatıyla yetiyor mu?
+    """Bütçe en küçük pakete (hedef + en ucuz aday) liste fiyatıyla yetiyor mu?
 
-    Koşul: hedef alt sınırı + en ucuz adayın alt sınırı + tek kargo <= bütçe.
+    Koşul: hedef liste fiyatı + en ucuz adayın liste fiyatı + tek kargo <= bütçe.
+    Alıcı modülünün select_bundle fonksiyonu da paketi aynı kuralla (liste fiyatları
+    + tek kargo bütçeyi aşmamalı) kurar.
     """
     by_id = {l.listing_id: l for l in listings}
     target = by_id[scenario.target_listing_id]
     candidates = bundle_candidates(scenario, listings)
     if not candidates:
         return False
-    cheapest = min(c.floor_price for c in candidates)
-    return target.floor_price + cheapest + target.shipping_cost <= scenario.budget
+    cheapest = min(c.list_price for c in candidates)
+    return target.list_price + cheapest + target.shipping_cost <= scenario.budget
 
 
 def check_listings(listings: list[Listing]) -> list[str]:
@@ -120,15 +122,27 @@ def main() -> None:
     print(f"sample_listings.json: {len(sample)} ilan, "
           f"3+ ilanlı satıcı: {len(multi_listing_sellers(sample))}")
 
+    try:  # alıcı modülü varsa onun gerçek paket seçimini de göster
+        from buyer.bundle import select_bundle
+    except ImportError:
+        select_bundle = None
+
     print(f"\nscenarios.json: {len(scenarios)} senaryo")
-    feasible_count = 0
+    feasible_count = real_count = 0
     for s in scenarios:
         candidates = bundle_candidates(s, listings)
         feasible = bundle_feasible(s, listings)
         feasible_count += feasible
-        print(f"  {s.scenario_id}: hedef={s.target_listing_id}  aday={len(candidates)}  "
-              f"paket {'MÜMKÜN' if feasible else 'mümkün değil'}")
+        line = (f"  {s.scenario_id}: hedef={s.target_listing_id}  aday={len(candidates)}  "
+                f"paket {'MÜMKÜN' if feasible else 'mümkün değil'}")
+        if select_bundle is not None:
+            size = len(select_bundle(s, listings, "bundle"))
+            real_count += size > 1
+            line += f"  | alıcı modülü: {size} ürün"
+        print(line)
     print(f"Paket mümkün: {feasible_count}/{len(scenarios)}")
+    if select_bundle is not None:
+        print(f"Alıcı modülünün paket kurduğu senaryo: {real_count}/{len(scenarios)}")
 
     errors = check_listings(listings) + check_listings(sample) + check_scenarios(scenarios, listings)
     if errors:

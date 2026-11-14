@@ -4,11 +4,13 @@
 Aynı seed her zaman aynı dosyaları üretir; deney tekrarlanabilir kalır.
 """
 import json
+import math
 import random
 from pathlib import Path
 
 from schemas import Listing, Scenario
 from data.validate import bundle_candidates, bundle_feasible, multi_listing_sellers
+from buyer.bundle import select_bundle  # alıcı modülünün gerçek paket seçimi (yalnızca kontrol için)
 
 DATA_DIR = Path(__file__).parent
 SEED = 42
@@ -151,7 +153,11 @@ def build_scenarios(listings: list[Listing], seed: int = SEED,
 
     need_list = hedefin ifadesi + aynı satıcıdan 1-2 ürün + (bazen) başka satıcıdan
     bir çeldirici. Paketli senaryoda bütçe, (paketin liste toplamı + kargo)'nun
-    %90-100'üdür. Dar senaryoda bütçe = hedefin liste fiyatı + kargo.
+    %100-110'udur: alıcı modülü paketi liste fiyatları bütçeye sığıyorsa kurduğu için
+    bütçe liste toplamının altında olmamalıdır. Dar senaryoda bütçe = hedefin liste
+    fiyatı + kargo; ikinci bir ürün sığmaz. Her senaryo alıcı modülünün select_bundle
+    fonksiyonuyla da denenir: paketli senaryoda birden fazla ürün, dar senaryoda yalnızca
+    hedef seçilmiyorsa o hedef atlanıp başkası denenir.
     """
     rng = random.Random(seed)
     need_of = _needs_by_listing(listings)
@@ -181,12 +187,15 @@ def build_scenarios(listings: list[Listing], seed: int = SEED,
             candidates = bundle_candidates(scenario, listings)
             if i in tight_indexes:
                 scenario.budget = round(target.list_price + target.shipping_cost, 2)
-                ok = not bundle_feasible(scenario, listings)
+                ok = (not bundle_feasible(scenario, listings)
+                      and len(select_bundle(scenario, listings, "bundle")) == 1)
             else:
                 bundle_list_total = target.list_price + sum(c.list_price for c in candidates)
-                scenario.budget = float(round(
-                    (bundle_list_total + target.shipping_cost) * rng.uniform(0.90, 1.00)))
-                ok = bundle_feasible(scenario, listings)
+                scenario.budget = float(math.ceil(
+                    (bundle_list_total + target.shipping_cost) * rng.uniform(1.00, 1.10)))
+                # Alıcı modülü de gerçekten paket kurmalı; yoksa bu senaryoda paket koşulu ölçülemez.
+                ok = (bundle_feasible(scenario, listings)
+                      and len(select_bundle(scenario, listings, "bundle")) > 1)
             if ok:
                 scenarios.append(scenario)
                 used_targets.add(target.listing_id)

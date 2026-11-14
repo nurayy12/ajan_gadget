@@ -17,13 +17,21 @@ from pathlib import Path
 import streamlit as st
 
 from schemas import Listing, NegotiationResult, Offer, Scenario
-from data.validate import bundle_candidates, load_listings, match_need
+from data.validate import load_listings, match_need
 
-# GERÇEK FONKSİYONLARA GEÇİŞ: yalnızca aşağıdaki import'u değiştir, örn.
-#   from core.negotiation import run_negotiation, approve, buyer_report
-from eval.fake import (fake_run_negotiation as run_negotiation,
-                       fake_approve as approve,
-                       fake_buyer_report as buyer_report)
+# ---- GERÇEK FONKSİYONLAR -------------------------------------------------------
+from buyer.agent import buyer_turn
+from buyer.bundle import select_bundle
+from buyer.report import buyer_report
+from core.negotiation import run_negotiation as core_run_negotiation, approve
+# --------------------------------------------------------------------------------
+
+
+def run_negotiation(scenario: Scenario, listings: list[Listing], mode: str,
+                    auto_approve: bool = True) -> NegotiationResult:
+    """Çekirdeğin pazarlık döngüsünü, alıcı modülünün gerçek fonksiyonlarını vererek çağırır."""
+    return core_run_negotiation(scenario, listings, mode, auto_approve=auto_approve,
+                                select_bundle_fn=select_bundle, buyer_turn_fn=buyer_turn)
 
 ROOT = Path(__file__).parent
 BUYER = "Alıcı hesabı"
@@ -64,7 +72,8 @@ def run_agent(run_fn, wanted: str, budget: float, wishlist: list[str],
 
     Her aday için geçici bir Scenario kurulur (hedef = bulunan ilan, need_list = istek listesi).
     İstenen ürün need_list'e eklenmez; eklenirse aynı türden ikinci bir ürün pakete girerdi.
-    Satıcıda istek listesinden başka ürün varsa mod "bundle", yoksa "single" olur.
+    Paket kararını alıcı modülünün select_bundle fonksiyonu verir: birden fazla ürün
+    seçerse mod "bundle", yalnızca hedefi döndürürse "single" olur.
     Bütçeyi aşan ya da anlaşmasız biten pazarlıklar elenir.
     """
     by_id = {l.listing_id: l for l in listings}
@@ -72,7 +81,7 @@ def run_agent(run_fn, wanted: str, budget: float, wishlist: list[str],
     for target in find_targets(wanted, listings):
         scenario = Scenario(scenario_id=f"WEB-{target.listing_id}", need_list=wishlist,
                             budget=budget, target_listing_id=target.listing_id)
-        mode = "bundle" if bundle_candidates(scenario, listings) else "single"
+        mode = "bundle" if len(select_bundle(scenario, listings, "bundle")) > 1 else "single"
         result = run_fn(scenario, listings, mode, auto_approve=False)
 
         accepted = bool(result.offers) and result.offers[-1].action == "accept"
@@ -138,7 +147,8 @@ def render_offer_card(key: str, offer: dict, rank: int, report_fn, listings: lis
         c3.metric("Kazanç", f"{offer['saving']:.0f} TL")
         with st.expander("Pazarlık mesajları ve ajan raporu"):
             render_chat(result.offers)
-            st.text(report_fn(result, listings))
+            # Onay öncesinde deal=False olabilir; rapor anlaşılan fiyatı göstersin diye kopyada True yapılır.
+            st.text(report_fn(result.model_copy(update={"deal": True}), listings))
         if offer["deal"]:
             st.success("Anlaşma sağlandı")
         elif offer["buyer_ok"]:
@@ -160,8 +170,9 @@ def buyer_page(run_fn, report_fn, listings: list[Listing]) -> None:
             if not wanted.strip():
                 st.warning("Önce almak istediğin ürünü yaz.")
             else:
-                st.session_state.offers = run_agent(run_fn, wanted.strip(), float(budget),
-                                                    st.session_state.wishlist, listings)
+                with st.spinner("Ajanın satıcılarla pazarlık ediyor..."):
+                    st.session_state.offers = run_agent(run_fn, wanted.strip(), float(budget),
+                                                        st.session_state.wishlist, listings)
                 st.session_state.searched = wanted.strip()
                 st.session_state.n_scanned = len(find_targets(wanted.strip(), listings))
 
