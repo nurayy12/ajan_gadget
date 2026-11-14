@@ -79,7 +79,7 @@ def test_broken_json_is_retried_once(monkeypatch):
 def test_custom_check_fn_replaces_default(monkeypatch):
     seen = []
 
-    def check(offer, scenario, bundle):
+    def check(offer, scenario, bundle, history):
         seen.append(offer.sender)
         return ["benim_ihlalim"]
 

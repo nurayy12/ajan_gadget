@@ -3,6 +3,7 @@ from itertools import combinations
 
 from schemas import Listing, Scenario
 
+from .config import START_FRACTION
 from .matching import _match_per_need
 
 
@@ -22,7 +23,7 @@ def bundle_shipping(bundle: list[Listing], target_listing_id: str) -> float:
 
 def select_bundle(scenario: Scenario, listings: list[Listing], mode: str) -> list[Listing]:
     """mode="single": yalnızca hedef ilan.
-    mode="bundle": hedef ilanı içeren, liste toplamı + tek kargo bütçeyi aşmayan ve en çok
+    mode="bundle": hedef ilanı içeren, alıcının ilk teklifi (liste toplamının %70'i) + tek kargo bütçeyi aşmayan ve en çok
     ihtiyaç maddesini karşılayan alt küme. Eşitlikte az ürünlü, o da eşitse ucuz olan seçilir.
     Hiçbir paket bütçeye sığmazsa yalnızca hedef ilan döner.
     """
@@ -57,7 +58,7 @@ def select_bundle(scenario: Scenario, listings: list[Listing], mode: str) -> lis
         for combo in combinations(others, size):
             items = [target, *combo]
             list_total = sum(l.list_price for l in items)
-            if list_total + target.shipping_cost > scenario.budget:
+            if START_FRACTION * list_total + target.shipping_cost > scenario.budget:
                 continue
             covered: set[int] = set()
             for l in items:

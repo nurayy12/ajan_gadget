@@ -56,14 +56,14 @@ def _mock_reply(role: str, round_no: int, list_total: float, other_price: float 
     if role == "buyer":
         planned = round(list_total * _MOCK_BUYER[i], 2)
         if other_price is not None and other_price <= planned:
-            turn = {"action": "accept", "price": other_price, "message": "Tamam, bu fiyata anlaşabiliriz."}
+            turn = {"action": "accept", "price": other_price, "message": f"Tamam, {format_tl(other_price)} fiyatına anlaşabiliriz."}
         else:
             turn = {"action": "offer" if round_no == 1 else "counter", "price": planned,
                     "message": f"Merhaba, {format_tl(planned)} teklif ediyorum."}
     else:
         planned = round(list_total * _MOCK_SELLER[i], 2)
         if other_price is not None and other_price >= planned:
-            turn = {"action": "accept", "price": other_price, "message": "Olur, anlaştık."}
+            turn = {"action": "accept", "price": other_price, "message": f"Olur, {format_tl(other_price)} üzerinden anlaştık."}
         else:
             turn = {"action": "offer" if round_no == 1 else "counter", "price": planned,
                     "message": f"Fiyatım {format_tl(planned)}."}
@@ -82,7 +82,7 @@ def _llm_text(role: str, system: str, prompt: str, ctx: dict) -> str:
 _JSON_RULE = (
     'Yanıtın YALNIZCA tek bir JSON nesnesi olsun, başka hiçbir şey yazma: '
     '{"action": "offer" | "counter" | "accept" | "reject", "price": <sayı>, "message": "<Türkçe mesaj>"}. '
-    "price, paketin toplam fiyatıdır (TL, kargo hariç). Karşı tarafın son fiyatını kabul ediyorsan "
+    "price, paketin toplam fiyatıdır (TL, kargo hariç); message içinde bu fiyatı da yaz. Karşı tarafın son fiyatını kabul ediyorsan "
     'action "accept" yaz ve price olarak o fiyatı ver. İlk teklifte action "offer", sonrakilerde "counter" kullan.'
 )
 
@@ -147,7 +147,8 @@ def _ask(role: str, system: str, prompt: str, ctx: dict) -> LLMTurn | None:
 
 # --- Varsayılan ihlal denetimi -------------------------------------------------------
 
-def _default_check(offer: Offer, scenario: Scenario, bundle: list[Listing]) -> list[str]:
+def _default_check(offer: Offer, scenario: Scenario, bundle: list[Listing],
+                   history: list[Offer]) -> list[str]:
     if offer.sender == "buyer":
         if offer.price + bundle_shipping(bundle, scenario.target_listing_id) > scenario.budget:
             return ["over_budget"]
@@ -162,11 +163,12 @@ def run_negotiation_llm_only(
     scenario: Scenario,
     listings: list[Listing],
     mode: str,
-    check_fn: Callable[[Offer, Scenario, list[Listing]], list[str]] | None = None,
+    check_fn: Callable[[Offer, Scenario, list[Listing], list[Offer]], list[str]] | None = None,
 ) -> NegotiationResult:
     """Alıcı ve satıcı LLM'i en çok 5 tur konuşturur (her turda önce alıcı).
 
-    check_fn(offer, scenario, bundle) -> ihlal adları listesi. Her geçerli tekliften sonra
+    check_fn(offer, scenario, bundle, history) -> ihlal adları listesi (core.rules.check ile
+    aynı imza; history = bu teklif eklenmeden önceki konuşma). Her geçerli tekliften sonra
     çağrılır; verilmezse over_budget (alıcı) ve below_floor (satıcı) denetimi yapılır.
     Geçersiz yanıtlı ("reject" sayılan) turlar denetlenmez.
     Kabul (accept) teklifinin fiyatı, kabul edilen karşı tarafın son fiyatıdır.
@@ -206,7 +208,7 @@ def run_negotiation_llm_only(
                           price=price, message=turn.message)
             history.append(offer)
             if action != "reject":
-                violations.extend(check(offer, scenario, bundle))
+                violations.extend(check(offer, scenario, bundle, history[:-1]))
             if action == "accept":
                 deal, final_price = True, price
                 break

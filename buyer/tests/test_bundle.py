@@ -13,23 +13,23 @@ def test_single_returns_only_target():
 
 
 def test_bundle_takes_all_needed_items_when_budget_allows():
-    # liste toplamı 1600 + hedef ilanın kargosu 50 = 1650 <= 1800
+    # 0,70 × 1600 + hedef ilanın kargosu 50 = 1170 <= 1800
     bundle = select_bundle(make_scenario(1800), LISTINGS, "bundle")
     assert ids(bundle) == ["L1", "L2", "L3"]
 
 
 def test_bundle_fits_exactly_at_budget_with_target_shipping():
-    # 1600 + 50 = 1650: tam bütçe sığar (en yüksek kargo 60 olsaydı sığmazdı)
-    assert ids(select_bundle(make_scenario(1650), LISTINGS, "bundle")) == ["L1", "L2", "L3"]
-    assert ids(select_bundle(make_scenario(1649), LISTINGS, "bundle")) == ["L1", "L3"]
+    # 0,70 × 1600 + 50 = 1170: tam bütçe sığar (en yüksek kargo 60 olsaydı sığmazdı)
+    assert ids(select_bundle(make_scenario(1170), LISTINGS, "bundle")) == ["L1", "L2", "L3"]
+    assert ids(select_bundle(make_scenario(1169), LISTINGS, "bundle")) == ["L1", "L3"]
 
 
 def test_bundle_respects_budget():
-    # üçü birden 1660 TL, bütçe 1500: iki ürünlük en ucuz paket (L1 + L3) seçilir
-    scenario = make_scenario(1500)
+    # üçü birden 0,70 × 1600 + 50 = 1170 TL, bütçe 1000: iki ürünlük en ucuz paket (L1 + L3) seçilir
+    scenario = make_scenario(1000)
     bundle = select_bundle(scenario, LISTINGS, "bundle")
     assert ids(bundle) == ["L1", "L3"]
-    assert sum(l.list_price for l in bundle) + bundle_shipping(bundle, "L1") <= scenario.budget
+    assert 0.70 * sum(l.list_price for l in bundle) + bundle_shipping(bundle, "L1") <= scenario.budget
 
 
 def test_bundle_only_uses_target_sellers_listings():
@@ -38,7 +38,7 @@ def test_bundle_only_uses_target_sellers_listings():
 
 
 def test_bundle_always_contains_target():
-    assert ids(select_bundle(make_scenario(450), LISTINGS, "bundle")) == ["L1"]  # 400 + 50
+    assert ids(select_bundle(make_scenario(450), LISTINGS, "bundle")) == ["L1"]  # L1+L3: 0,70×700+50 = 540 > 450
     assert ids(select_bundle(make_scenario(100), LISTINGS, "bundle")) == ["L1"]  # sığmasa da hedef kalır
 
 
