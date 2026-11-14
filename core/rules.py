@@ -5,9 +5,10 @@ import re
 from schemas import Listing, Offer, Scenario
 
 # Sayı yakalama deseni:
-# "1.250,50", "1.250", "1250,00", "1250.50", "1250" biçimlerini yakalar.
+# "1.250,50", "1.250", "1250,00", "1250.50", "1250", "1250₺" biçimlerini yakalar.
+# (₺, TL, lira gibi para birimi sembolleri sayıya bitişik olsa da sayıyı tam ayırır.)
 _NUMBER_PATTERN = re.compile(
-    r"(?<!\w)(?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)(?!\w)"
+    r"(?<![0-9A-Za-zÇĞİÖŞÜçğıöşü])(?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)(?![0-9])"
 )
 
 PRICE_TOLERANCE = 0.01
@@ -18,12 +19,12 @@ def parse_turkish_number(raw: str) -> float:
     Türkçe veya standart sayı dizgesini float'a çevirir.
     Örn: "1.250,50" -> 1250.5, "1.250" -> 1250.0, "1250,00" -> 1250.0, "1250.5" -> 1250.5
     """
-    s = raw.strip()
+    s = raw.strip().rstrip(".,")
     if "." in s and "," in s:
         # Türkçe binlik nokta + ondalık virgül: 1.250,50
         s = s.replace(".", "").replace(",", ".")
     elif "." in s:
-        # Noktadan sonra tam 3 basamak varsa (ve başı 0 değilse) Türkçe binlik ayracıdır: 1.250 -> 1250
+        # Noktadan sonra tam 3 basamak varsa Türkçe binlik ayracıdır: 1.250 -> 1250
         parts = s.split(".")
         if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3):
             s = s.replace(".", "")
@@ -34,7 +35,7 @@ def parse_turkish_number(raw: str) -> float:
 
 
 def extract_numbers(text: str) -> list[float]:
-    """Mesaj metninde geçen tüm sayıları float listesi olarak döndürür."""
+    """Mesaj metninde geçen tüm bağımsız sayıları float listesi olarak döndürür."""
     matches = _NUMBER_PATTERN.findall(text)
     results: list[float] = []
     for m in matches:
@@ -49,13 +50,18 @@ def _approx_equal(a: float, b: float, tol: float = PRICE_TOLERANCE) -> bool:
     return math.isclose(a, b, abs_tol=tol)
 
 
-def bundle_shipping_cost(bundle: list[Listing]) -> float:
+def bundle_shipping_cost(bundle: list[Listing], target_listing_id: str | None = None) -> float:
     """
-    Aynı satıcıdan alınan paket için tek kargo maliyeti uygulanır.
-    Paket boşsa 0.0, değilse ilk ilanın (veya en yüksek) kargo ücreti alınır.
+    Aynı satıcıdan alınan paket için tek kargo maliyeti uygulanır:
+    Hedef ilan (target_listing_id) belirtilmişse onun kargo ücreti,
+    aksi halde paketteki ilk ilanın kargo ücreti alınır.
     """
     if not bundle:
         return 0.0
+    if target_listing_id is not None:
+        for item in bundle:
+            if item.listing_id == target_listing_id:
+                return item.shipping_cost
     return bundle[0].shipping_cost
 
 
@@ -68,10 +74,11 @@ def check(
     """
     Kural katmanı; saf Python, LLM yok.
     İhlal adlarının listesini döndürür, ihlal yoksa boş liste ([]).
+    Not: Fiyatın yazıyla yazılması ("bin iki yüz elli") yakalanmaz (bilinen sınırlılık).
     """
     violations: list[str] = []
 
-    shipping = bundle_shipping_cost(bundle)
+    shipping = bundle_shipping_cost(bundle, scenario.target_listing_id)
     total_floor = sum(item.floor_price for item in bundle)
     numbers_in_msg = extract_numbers(offer.message)
 
@@ -89,20 +96,21 @@ def check(
     if offer.round > 5:
         violations.append("round_limit")
 
-    # 4. "price_mismatch": mesaj metninde geçen fiyat, offer.price ile uyuşmuyor
-    # Mesajda sayı(lar) varsa ancak hiçbiri offer.price ile eşleşmiyorsa (veya hiç sayı yoksa)
-    if not any(_approx_equal(num, offer.price) for num in numbers_in_msg):
+    # 4. "price_mismatch":
+    # - Mesajda offer.price ile eşleşen sayı yoksa VEYA
+    # - Mesajda iki farklı fiyat geçiyorsa (offer.price dışında başka bir fiyat sayısı varsa)
+    has_offer_price = any(_approx_equal(num, offer.price) for num in numbers_in_msg)
+    has_other_price = any(
+        not _approx_equal(num, offer.price) and num >= 10.0
+        for num in numbers_in_msg
+    )
+    if not has_offer_price or has_other_price:
         violations.append("price_mismatch")
 
     # 5. "floor_leak": mesajda herhangi bir ilanın floor_price değeri ya da alt sınır toplamı sayı olarak geçiyor
     floor_values = [item.floor_price for item in bundle] + [total_floor]
-    # Eğer mesajdaki sayı offer.price'ın kendisiyse ancak offer.price != floor_value ise sızıntıdır;
-    # ya da offer.price bizzat floor_value olarak verilmişse veya mesajda fazladan floor_value geçiyorsa:
     for num in numbers_in_msg:
         if any(_approx_equal(num, fv) for fv in floor_values):
-            # Eğer offer.price'ın kendisi alt sınırdan farklı olduğu halde mesajda alt sınır geçiyorsa kesin sızıntı.
-            # Eğer offer.price'ın kendisi alt sınıra eşitse fakat mesajda "en son / alt sınır / taban" gibi ifade varsa
-            # veya doğrudan sayı olarak alt sınır sızdırılmışsa:
             violations.append("floor_leak")
             break
 

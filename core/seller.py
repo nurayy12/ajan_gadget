@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dotenv import load_dotenv
 from schemas import Listing, Offer
 
@@ -10,11 +11,25 @@ load_dotenv()
 T_MAX: int = 5
 SELLER_BETA: float = 0.5  # Yavaş taviz (Boulware)
 DEFAULT_MODEL_NAME: str = "claude-haiku-5-5"
+LLM_TIMEOUT_SECONDS: float = 15.0
+LLM_MAX_RETRIES: int = 3
+LLM_BACKOFF_BASE: float = 0.5
+
+# Son seller_turn çağrısında LLM 3 denemede de hata verdiyse True olur
+_LAST_SELLER_LLM_FAILED: bool = False
+
+
+def pop_seller_llm_error() -> bool:
+    """Son seller_turn çağrısında 3 deneme sonunda LLM hatası olup olmadığını döndürür ve sıfırlar."""
+    global _LAST_SELLER_LLM_FAILED
+    val = _LAST_SELLER_LLM_FAILED
+    _LAST_SELLER_LLM_FAILED = False
+    return val
 
 
 def format_price_tr(price: float) -> str:
     """Fiyatı temiz bir Türkçe metin biçimine çevirir (örn. 1250.0 -> '1250', 1250.5 -> '1250,50')."""
-    if float(price).is_integer():
+    if abs(price - round(price)) < 0.005:
         return str(int(round(price)))
     return f"{price:.2f}".replace(".", ",")
 
@@ -25,18 +40,11 @@ def seller_target_price(bundle: list[Listing], round: int) -> float:
     fiyat(t) = başlangıç + (sınır - başlangıç) * (t / T) ** (1 / beta), T = 5
     başlangıç = liste fiyatları toplamı
     sınır     = alt sınırların toplamı
-    Not: 5. turda (t=T) formül tam olarak alt sınıra (total_floor) değdiğinde check() içindeki
-    "floor_leak" (alt sınırın mesajda sayı olarak geçmesi) kuralına takılmamak için,
-    eğer hesaplanan hedef fiyat alt sınıra veya tekil bir ilanın floor_price değerine tam eşitse
-    1 TL yukarı yuvarlanır (böylece satıcı gizli alt sınırını mesajda asla açık etmez).
     """
     start_price = sum(item.list_price for item in bundle)
     limit_price = sum(item.floor_price for item in bundle)
 
     t = max(1, min(round, T_MAX))
-    # Standart taviz formülü: t=1..5 için (t - 1) / T veya t / T:
-    # Formül: fiyat(t) = başlangıç + (sınır - başlangıç) * (t / T) ** (1 / beta)
-    # Ancak t == T (5. tur) olduğunda tam sınır (floor) sayısını mesajda söylememek için:
     raw_price = start_price + (limit_price - start_price) * ((t / T_MAX) ** (1.0 / SELLER_BETA))
     price = float(int(builtins_round(raw_price)))
 
@@ -96,6 +104,12 @@ def _build_seller_prompt(
     )
 
 
+def _template_seller_message(price_str: str, action: str) -> str:
+    if action == "accept":
+        return f"Teklifiniz uygun, {price_str} TL üzerinden anlaşalım."
+    return f"Ürünler çok temiz durumda, bu paket için {price_str} TL yapabilirim."
+
+
 def generate_seller_message(
     bundle: list[Listing],
     history: list[Offer],
@@ -104,36 +118,41 @@ def generate_seller_message(
 ) -> str:
     """
     USE_MOCK_LLM=1 ise şablon mesaj döndürür.
-    Aksi halde Anthropic SDK ile MODEL_NAME (varsayılan 'claude-haiku-5-5') modelini çağırır.
+    Aksi halde Anthropic SDK ile MODEL_NAME (varsayılan 'claude-haiku-5-5') modelini
+    zaman aşımı (timeout) ve en fazla 3 denemeli, artan beklemeli (exponential backoff)
+    yeniden deneme ile çağırır. Üçü de başarısızsa şablona düşer ve _LAST_SELLER_LLM_FAILED=True işaretler.
     """
+    global _LAST_SELLER_LLM_FAILED
+    _LAST_SELLER_LLM_FAILED = False
+
     price_str = format_price_tr(target_price)
     use_mock = os.getenv("USE_MOCK_LLM", "0") == "1"
 
     if use_mock:
-        if action == "accept":
-            return f"Teklifiniz uygun, {price_str} TL üzerinden anlaşalım."
-        return f"Ürünler çok temiz durumda, bu paket için {price_str} TL yapabilirim."
+        return _template_seller_message(price_str, action)
 
-    try:
-        import anthropic  # type: ignore
+    prompt = _build_seller_prompt(bundle, history, target_price, action)
+    model_name = os.getenv("MODEL_NAME", DEFAULT_MODEL_NAME)
+    api_key = os.getenv("ANTHROPIC_API_KEY")
 
-        model_name = os.getenv("MODEL_NAME", DEFAULT_MODEL_NAME)
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        client = anthropic.Anthropic(api_key=api_key)
-        prompt = _build_seller_prompt(bundle, history, target_price, action)
-        response = client.messages.create(
-            model=model_name,
-            max_tokens=150,
-            temperature=0.3,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = response.content[0].text.strip()
-        return text
-    except Exception:
-        # API hatası veya eksik paket durumunda güvenli şablona dön
-        if action == "accept":
-            return f"Teklifiniz uygun, {price_str} TL üzerinden anlaşalım."
-        return f"Bu ürünler için {price_str} TL teklif ediyorum."
+    for attempt in range(LLM_MAX_RETRIES):
+        try:
+            import anthropic  # type: ignore
+
+            client = anthropic.Anthropic(api_key=api_key, timeout=LLM_TIMEOUT_SECONDS)
+            response = client.messages.create(
+                model=model_name,
+                max_tokens=150,
+                temperature=0.3,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.content[0].text.strip()
+        except Exception:
+            if attempt < LLM_MAX_RETRIES - 1:
+                time.sleep(LLM_BACKOFF_BASE * (2 ** attempt))
+
+    _LAST_SELLER_LLM_FAILED = True
+    return _template_seller_message(price_str, action)
 
 
 def seller_turn(

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Callable, Literal
 from schemas import Listing, NegotiationResult, Offer, Scenario
 from core.rules import bundle_shipping_cost, check
-from core.seller import format_price_tr, seller_turn, T_MAX
+from core.seller import format_price_tr, pop_seller_llm_error, seller_turn, T_MAX
 
 
 def _default_select_bundle(
@@ -16,7 +18,7 @@ def _default_select_bundle(
     buyer modülü henüz yoksa target_listing_id üzerinden temel seçimi yapar.
     """
     try:
-        from buyer import select_bundle as buyer_select_bundle  # type: ignore
+        from buyer.bundle import select_bundle as buyer_select_bundle  # type: ignore
 
         return buyer_select_bundle(scenario, listings, mode)
     except ImportError:
@@ -35,9 +37,14 @@ def _default_buyer_turn(
     round: int,
 ) -> Offer:
     """Eğer dışarıdan buyer_turn verilmemişse buyer modülünden import eder."""
-    from buyer import buyer_turn as real_buyer_turn  # type: ignore
+    try:
+        from buyer.agent import buyer_turn as real_buyer_turn  # type: ignore
 
-    return real_buyer_turn(scenario, bundle, history, round)
+        return real_buyer_turn(scenario, bundle, history, round)
+    except ImportError:
+        from buyer import buyer_turn as real_buyer_turn  # type: ignore
+
+        return real_buyer_turn(scenario, bundle, history, round)
 
 
 def _sanitize_offer_with_template(
@@ -50,7 +57,7 @@ def _sanitize_offer_with_template(
     - Fiyat sınır dışıysa güvenli sınıra çeker (bütçe veya alt sınır).
     - Sabit, temiz bir Türkçe şablon mesaj yazar.
     """
-    shipping = bundle_shipping_cost(bundle)
+    shipping = bundle_shipping_cost(bundle, scenario.target_listing_id)
     total_floor = sum(item.floor_price for item in bundle)
     safe_price = offer.price
 
@@ -58,7 +65,6 @@ def _sanitize_offer_with_template(
         max_allowed = max(0.0, scenario.budget - shipping)
         if safe_price > max_allowed:
             safe_price = max_allowed
-        # Bütçe sızıntısı veya alt sınır sızıntısına çakışmaması için gerekirse 1 TL aşağı çek
         if abs(safe_price - scenario.budget) < 0.02:
             safe_price = max(0.0, safe_price - 1.0)
     else:
@@ -83,6 +89,29 @@ def _sanitize_offer_with_template(
         price=safe_price,
         message=template_msg,
     )
+
+
+def _append_trace(
+    trace_path: str | Path | None,
+    round_no: int,
+    sender: str,
+    price: float,
+    message: str,
+    violations: list[str],
+) -> None:
+    if trace_path is None:
+        return
+    p = Path(trace_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "round": round_no,
+        "sender": sender,
+        "price": price,
+        "message": message,
+        "violations": violations,
+    }
+    with open(p, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def approve(
@@ -116,6 +145,7 @@ def run_negotiation(
     select_bundle_fn: Callable[[Scenario, list[Listing], Literal["single", "bundle"]], list[Listing]] | None = None,
     buyer_turn_fn: Callable[[Scenario, list[Listing], list[Offer], int], Offer] | None = None,
     seller_turn_fn: Callable[[list[Listing], list[Offer], int], Offer] | None = None,
+    trace_path: str | Path | None = None,
 ) -> NegotiationResult:
     """
     Pazarlık döngüsünü çalıştırır:
@@ -124,6 +154,7 @@ def run_negotiation(
     3. Her tekliften sonra check() çalıştırır:
        - İhlal varsa result.violations listesine yazar ve teklifi 1 kez yeniden ürettirir.
        - Yeniden üretimde de ihlal varsa sabit şablon mesaj kullanır.
+       - trace_path verilmişse her turu JSONL olarak dosyaya yazar.
     4. Bir taraf 'accept' derse döngü biter. 5 turda anlaşma yoksa deal=False döner.
     """
     sel_fn = select_bundle_fn or _default_select_bundle
@@ -142,20 +173,24 @@ def run_negotiation(
         last_round = r
 
         # --- 1. ALICI TURU ---
+        b_turn_violations: list[str] = []
         b_offer = b_fn(scenario, bundle, history, r)
         b_violations = check(b_offer, scenario, bundle, history)
         if b_violations:
             all_violations.extend(b_violations)
+            b_turn_violations.extend(b_violations)
             # 1 kez yeniden ürettir
             b_offer_retry = b_fn(scenario, bundle, history, r)
             b_violations_retry = check(b_offer_retry, scenario, bundle, history)
             if b_violations_retry:
                 all_violations.extend(b_violations_retry)
+                b_turn_violations.extend(b_violations_retry)
                 b_offer = _sanitize_offer_with_template(b_offer_retry, scenario, bundle)
             else:
                 b_offer = b_offer_retry
 
         history.append(b_offer)
+        _append_trace(trace_path, r, b_offer.sender, b_offer.price, b_offer.message, b_turn_violations)
 
         if b_offer.action == "accept":
             agreed_price = b_offer.price
@@ -164,20 +199,32 @@ def run_negotiation(
             break
 
         # --- 2. SATICI TURU ---
+        s_turn_violations: list[str] = []
+        pop_seller_llm_error()  # Önceki durumu temizle
         s_offer = s_fn(bundle, history, r)
+        if pop_seller_llm_error():
+            all_violations.append("llm_error")
+            s_turn_violations.append("llm_error")
+
         s_violations = check(s_offer, scenario, bundle, history)
         if s_violations:
             all_violations.extend(s_violations)
+            s_turn_violations.extend(s_violations)
             # 1 kez yeniden ürettir
             s_offer_retry = s_fn(bundle, history, r)
+            if pop_seller_llm_error():
+                all_violations.append("llm_error")
+                s_turn_violations.append("llm_error")
             s_violations_retry = check(s_offer_retry, scenario, bundle, history)
             if s_violations_retry:
                 all_violations.extend(s_violations_retry)
+                s_turn_violations.extend(s_violations_retry)
                 s_offer = _sanitize_offer_with_template(s_offer_retry, scenario, bundle)
             else:
                 s_offer = s_offer_retry
 
         history.append(s_offer)
+        _append_trace(trace_path, r, s_offer.sender, s_offer.price, s_offer.message, s_turn_violations)
 
         if s_offer.action == "accept":
             agreed_price = s_offer.price
@@ -186,7 +233,7 @@ def run_negotiation(
             break
 
     # Sınırlar içinde geçerli bir anlaşma olup olmadığını doğrula
-    shipping = bundle_shipping_cost(bundle)
+    shipping = bundle_shipping_cost(bundle, scenario.target_listing_id)
     total_floor = sum(item.floor_price for item in bundle)
     within_bounds = (
         agreed_price is not None
@@ -201,7 +248,6 @@ def run_negotiation(
         deal = True
         final_price = agreed_price
     else:
-        # auto_approve=False (demo modu): onay bekleyen sonuç döndürür (deal=False, final_price=agreed_price)
         deal = False
         final_price = agreed_price
 

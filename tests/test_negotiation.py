@@ -264,3 +264,96 @@ def test_negotiation_with_violations_and_approval_flow() -> None:
     rejected = approve(result, buyer_ok=True, seller_ok=False)
     assert rejected.deal is False
     assert rejected.final_price is None
+
+
+def test_trace_path_writes_jsonl(tmp_path: pytest.TempPathFactory) -> None:
+    """trace_path verildiğinde her tur JSONL olarak dosyaya yazılmalı."""
+    import json
+
+    trace_file = tmp_path / "trace.jsonl"
+    scenario = Scenario(
+        scenario_id="SC_TRACE",
+        need_list=["deri ceket"],
+        budget=2000.0,
+        target_listing_id="B1",
+    )
+    scripted = [
+        Offer(
+            sender="buyer",
+            round=1,
+            action="offer",
+            listing_ids=["B1"],
+            price=990.0,
+            message="Merhaba, ceket için 990 TL teklif ediyorum.",
+        ),
+    ]
+    result = run_negotiation(
+        scenario=scenario,
+        listings=FIXED_BUNDLE,
+        mode="single",
+        auto_approve=True,
+        select_bundle_fn=fake_select_bundle,
+        buyer_turn_fn=make_fake_buyer_turn(scripted),
+        trace_path=trace_file,
+    )
+    assert result.deal is True
+    lines = trace_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2
+    first_rec = json.loads(lines[0])
+    assert set(first_rec.keys()) == {"round", "sender", "price", "message", "violations"}
+    assert first_rec["sender"] == "buyer"
+
+
+def test_llm_retry_and_fallback_records_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM 3 denemede de hata verdiğinde şablona düşmeli ve violations'a 'llm_error' yazılmalı."""
+    import core.seller as seller_mod
+
+    monkeypatch.setenv("USE_MOCK_LLM", "0")
+    monkeypatch.setattr(seller_mod, "LLM_BACKOFF_BASE", 0.0)
+
+    call_count = 0
+
+    class FailingMessages:
+        def create(self, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError("Simüle edilmiş API zaman aşımı / bağlantı hatası")
+
+    class FailingClient:
+        def __init__(self, **kwargs):
+            self.messages = FailingMessages()
+
+    import anthropic
+
+    monkeypatch.setattr(anthropic, "Anthropic", FailingClient)
+
+    scenario = Scenario(
+        scenario_id="SC_LLM_ERR",
+        need_list=["deri ceket"],
+        budget=2000.0,
+        target_listing_id="B1",
+    )
+    scripted = [
+        Offer(
+            sender="buyer",
+            round=1,
+            action="offer",
+            listing_ids=["B1"],
+            price=990.0,
+            message="Ceket için 990 TL veririm.",
+        ),
+    ]
+    result = run_negotiation(
+        scenario=scenario,
+        listings=FIXED_BUNDLE,
+        mode="single",
+        auto_approve=True,
+        select_bundle_fn=fake_select_bundle,
+        buyer_turn_fn=make_fake_buyer_turn(scripted),
+    )
+
+    assert call_count == 3  # Tam 3 kez yeniden denemiş olmalı
+    assert "llm_error" in result.violations
+    assert result.deal is True
+    assert "990" in result.offers[-1].message
+

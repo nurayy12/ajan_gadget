@@ -54,7 +54,6 @@ def test_extract_numbers_turkish_formats() -> None:
 
 # --- 1. KURAL: over_budget ---
 def test_rule_over_budget_pass(sample_bundle: list[Listing], sample_scenario: Scenario) -> None:
-    # 1250 + 50 (kargo) = 1300 <= 1350 (bütçe) -> İhlal yok
     offer = Offer(
         sender="buyer",
         round=1,
@@ -69,7 +68,6 @@ def test_rule_over_budget_pass(sample_bundle: list[Listing], sample_scenario: Sc
 
 
 def test_rule_over_budget_fail(sample_bundle: list[Listing], sample_scenario: Scenario) -> None:
-    # 1320 + 50 (kargo) = 1370 > 1350 (bütçe) -> over_budget
     offer = Offer(
         sender="buyer",
         round=1,
@@ -84,7 +82,6 @@ def test_rule_over_budget_fail(sample_bundle: list[Listing], sample_scenario: Sc
 
 # --- 2. KURAL: below_floor ---
 def test_rule_below_floor_pass(sample_bundle: list[Listing], sample_scenario: Scenario) -> None:
-    # Satıcı teklifi 1250 >= 1100 (toplam alt sınır) -> İhlal yok
     offer = Offer(
         sender="seller",
         round=2,
@@ -99,7 +96,6 @@ def test_rule_below_floor_pass(sample_bundle: list[Listing], sample_scenario: Sc
 
 
 def test_rule_below_floor_fail(sample_bundle: list[Listing], sample_scenario: Scenario) -> None:
-    # Satıcı teklifi 1050 < 1100 (toplam alt sınır) -> below_floor
     offer = Offer(
         sender="seller",
         round=2,
@@ -156,7 +152,6 @@ def test_rule_price_mismatch_pass(sample_bundle: list[Listing], sample_scenario:
 
 
 def test_rule_price_mismatch_fail(sample_bundle: list[Listing], sample_scenario: Scenario) -> None:
-    # offer.price=1400 ama mesajda 1300 yazıyor -> price_mismatch
     offer = Offer(
         sender="seller",
         round=1,
@@ -171,7 +166,6 @@ def test_rule_price_mismatch_fail(sample_bundle: list[Listing], sample_scenario:
 
 # --- 5. KURAL: floor_leak ---
 def test_rule_floor_leak_pass(sample_bundle: list[Listing], sample_scenario: Scenario) -> None:
-    # Mesajda ne 600, ne 500, ne de 1100 geçiyor
     offer = Offer(
         sender="seller",
         round=2,
@@ -186,7 +180,6 @@ def test_rule_floor_leak_pass(sample_bundle: list[Listing], sample_scenario: Sce
 
 
 def test_rule_floor_leak_fail_total_or_single(sample_bundle: list[Listing], sample_scenario: Scenario) -> None:
-    # Mesajda toplam alt sınır (1.100 TL) ve tekil alt sınır (600) sızdırılıyor
     offer_total = Offer(
         sender="seller",
         round=2,
@@ -212,7 +205,6 @@ def test_rule_floor_leak_fail_total_or_single(sample_bundle: list[Listing], samp
 
 # --- 6. KURAL: budget_leak ---
 def test_rule_budget_leak_pass(sample_bundle: list[Listing], sample_scenario: Scenario) -> None:
-    # Bütçe 1350.0, mesajda केवल teklif (1200) geçiyor
     offer = Offer(
         sender="buyer",
         round=1,
@@ -227,7 +219,6 @@ def test_rule_budget_leak_pass(sample_bundle: list[Listing], sample_scenario: Sc
 
 
 def test_rule_budget_leak_fail(sample_bundle: list[Listing], sample_scenario: Scenario) -> None:
-    # Alıcı mesajda bütçesi olan 1350'yi ağzından kaçırıyor
     offer = Offer(
         sender="buyer",
         round=1,
@@ -238,3 +229,79 @@ def test_rule_budget_leak_fail(sample_bundle: list[Listing], sample_scenario: Sc
     )
     violations = check(offer, sample_scenario, sample_bundle, [])
     assert "budget_leak" in violations
+
+
+# --- ZOR DURUM TESTLERİ (EDGE CASES) ---
+
+@pytest.mark.parametrize(
+    "formatted_text",
+    [
+        "Bu paket için teklifim 1.250 TL.",
+        "Bu paket için teklifim 1250₺.",
+        "Bu paket için teklifim 1250,00 lira.",
+    ],
+)
+def test_edge_price_currency_formats(
+    formatted_text: str, sample_bundle: list[Listing], sample_scenario: Scenario
+) -> None:
+    """Fiyatın '1.250 TL', '1250₺', '1250,00 lira' biçimlerinde yazılması ihlalsiz geçmeli."""
+    offer = Offer(
+        sender="buyer",
+        round=1,
+        action="offer",
+        listing_ids=["L1", "L2"],
+        price=1250.0,
+        message=formatted_text,
+    )
+    assert check(offer, sample_scenario, sample_bundle, []) == []
+
+
+def test_edge_two_different_prices_in_message(
+    sample_bundle: list[Listing], sample_scenario: Scenario
+) -> None:
+    """Mesajda iki farklı fiyat geçmesi (örn. 1400 ve 1250) price_mismatch olarak yakalanmalı."""
+    offer = Offer(
+        sender="buyer",
+        round=2,
+        action="counter",
+        listing_ids=["L1", "L2"],
+        price=1250.0,
+        message="Önce 1400 TL düşünmüştüm ama şimdi 1.250 TL teklif ediyorum.",
+    )
+    violations = check(offer, sample_scenario, sample_bundle, [])
+    assert "price_mismatch" in violations
+
+
+def test_edge_floor_as_substring_of_larger_number_not_a_leak() -> None:
+    """Alt sınır 250 iken mesajda 1250 yazması floor_leak sayılmamalı."""
+    bundle = [
+        Listing(
+            listing_id="L_SUB",
+            seller_id="S1",
+            title="Ceket",
+            description="Temiz ceket",
+            category="Giyim",
+            size="M",
+            condition="İyi",
+            list_price=1500.0,
+            floor_price=250.0,
+            shipping_cost=40.0,
+        )
+    ]
+    scenario = Scenario(
+        scenario_id="SC_SUB",
+        need_list=["ceket"],
+        budget=1600.0,
+        target_listing_id="L_SUB",
+    )
+    offer = Offer(
+        sender="seller",
+        round=1,
+        action="counter",
+        listing_ids=["L_SUB"],
+        price=1250.0,
+        message="Bu ürün için 1250 TL yapabilirim.",
+    )
+    violations = check(offer, scenario, bundle, [])
+    assert "floor_leak" not in violations
+    assert violations == []
