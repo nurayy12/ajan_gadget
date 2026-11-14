@@ -153,9 +153,10 @@ def build_scenarios(listings: list[Listing], seed: int = SEED,
 
     need_list = hedefin ifadesi + aynı satıcıdan 1-2 ürün + (bazen) başka satıcıdan
     bir çeldirici. Paketli senaryoda bütçe, (paketin liste toplamı + kargo)'nun
-    %100-110'udur: alıcı modülü paketi liste fiyatları bütçeye sığıyorsa kurduğu için
-    bütçe liste toplamının altında olmamalıdır. Dar senaryoda bütçe = hedefin liste
-    fiyatı + kargo; ikinci bir ürün sığmaz. Her senaryo alıcı modülünün select_bundle
+    %100-110'udur. Dar senaryoda bütçe = hedefin liste fiyatı + kargo ve hedef, ikinci
+    bir ürünle pazarlığa başlamaya bu bütçe yetmeyecek şekilde seçilir (alıcı modülü
+    paketi, ilk teklif = liste toplamının %70'i + kargo bütçeye sığıyorsa kurar).
+    Her senaryo alıcı modülünün select_bundle
     fonksiyonuyla da denenir: paketli senaryoda birden fazla ürün, dar senaryoda yalnızca
     hedef seçilmiyorsa o hedef atlanıp başkası denenir.
     """

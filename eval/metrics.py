@@ -24,6 +24,9 @@ MODES = ["single", "bundle"]
 SYSTEM_LABELS = {"system": "Asıl sistem", "llm_only": "Yalnızca LLM"}
 MODE_LABELS = {"single": "Tek ürün", "bundle": "Paket"}
 MODE_COLORS = {"single": "#2a78d6", "bundle": "#eb6834"}
+# Çekirdek, LLM çağrısı başarısız olunca violations listesine bu kodu ekler. Bu bir kural
+# ihlali değil teknik hatadır; ihlal oranına katılmaz, ayrı sütunda raporlanır.
+LLM_ERROR = "llm_error"
 
 
 def load_results(results_path: str | Path, listings_path: str | Path,
@@ -75,7 +78,9 @@ def load_results(results_path: str | Path, listings_path: str | Path,
             "deal": deal, "final_price": price, "n_items": len(items),
             "list_total": list_total, "floor_total": floor_total,
             "discount": discount, "utility": utility, "rounds": res["rounds"],
-            "violations": res["violations"], "has_violation": len(res["violations"]) > 0,
+            "violations": res["violations"],
+            "has_violation": any(v != LLM_ERROR for v in res["violations"]),
+            "has_llm_error": LLM_ERROR in res["violations"],
         })
     return pd.DataFrame(rows)
 
@@ -101,6 +106,7 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
                 "Ort. alıcı faydası": g["utility"].mean(),
                 "Ort. tur": g["rounds"].mean(),
                 "İhlal oranı (%)": 100 * g["has_violation"].mean(),
+                "LLM hatalı çalıştırma": int(g["has_llm_error"].sum()),
             })
     return pd.DataFrame(rows)
 

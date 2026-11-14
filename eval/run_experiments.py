@@ -52,17 +52,9 @@ def run_system(scenario: Scenario, listings: list[Listing], mode: str) -> Negoti
                            select_bundle_fn=select_bundle, buyer_turn_fn=buyer_turn)
 
 
-def check_for_baseline(offer, scenario: Scenario, bundle: list[Listing]) -> list[str]:
-    """core'daki check 4 parametre alır (sonuncusu history), baseline ise 3 parametreyle çağırır.
-
-    Bu küçük uyarlayıcı aradaki farkı kapatır; check, history'yi kullanmadığı için boş liste verilir.
-    """
-    return check(offer, scenario, bundle, [])
-
-
 def run_llm_only(scenario: Scenario, listings: list[Listing], mode: str) -> NegotiationResult:
     """Karşılaştırma sistemi: fiyatı da LLM belirler; ihlaller core'daki check ile sayılır."""
-    return run_negotiation_llm_only(scenario, listings, mode, check_fn=check_for_baseline)
+    return run_negotiation_llm_only(scenario, listings, mode, check_fn=check)
 
 
 SYSTEMS: dict[str, NegotiateFn] = {"system": run_system, "llm_only": run_llm_only}

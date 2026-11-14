@@ -10,6 +10,8 @@ from pathlib import Path
 from schemas import Listing, Scenario
 
 DATA_DIR = Path(__file__).parent
+# Alıcının ilk teklifi liste toplamının bu oranıdır (buyer/config.py içindeki START_FRACTION ile aynı olmalı).
+BUYER_START_FRACTION = 0.70
 
 
 def load_listings(path: str | Path) -> list[Listing]:
@@ -58,11 +60,11 @@ def bundle_candidates(scenario: Scenario, listings: list[Listing]) -> list[Listi
 
 
 def bundle_feasible(scenario: Scenario, listings: list[Listing]) -> bool:
-    """Bütçe en küçük pakete (hedef + en ucuz aday) liste fiyatıyla yetiyor mu?
+    """Bütçe en küçük paketle (hedef + en ucuz aday) pazarlığa başlamaya yetiyor mu?
 
-    Koşul: hedef liste fiyatı + en ucuz adayın liste fiyatı + tek kargo <= bütçe.
-    Alıcı modülünün select_bundle fonksiyonu da paketi aynı kuralla (liste fiyatları
-    + tek kargo bütçeyi aşmamalı) kurar.
+    Koşul: 0.70 * (hedef + en ucuz adayın liste fiyatı) + tek kargo <= bütçe.
+    Alıcı modülünün select_bundle fonksiyonu da paketi aynı kuralla kurar: alıcının
+    ilk teklifi (liste toplamının %70'i) + tek kargo bütçeyi aşmamalıdır.
     """
     by_id = {l.listing_id: l for l in listings}
     target = by_id[scenario.target_listing_id]
@@ -70,7 +72,8 @@ def bundle_feasible(scenario: Scenario, listings: list[Listing]) -> bool:
     if not candidates:
         return False
     cheapest = min(c.list_price for c in candidates)
-    return target.list_price + cheapest + target.shipping_cost <= scenario.budget
+    first_offer = BUYER_START_FRACTION * (target.list_price + cheapest)
+    return first_offer + target.shipping_cost <= scenario.budget
 
 
 def check_listings(listings: list[Listing]) -> list[str]:

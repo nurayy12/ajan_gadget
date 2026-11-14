@@ -41,100 +41,97 @@
   {
     "scenario_id": "SC05",
     "need_list": [
-      "kol saati",
-      "deri kemer",
-      "gri sneaker"
+      "ipek fular",
+      "güneş gözlüğü",
+      "spor atlet"
     ],
-    "budget": 1169.9,
-    "target_listing_id": "L020"
+    "budget": 1269.9,
+    "target_listing_id": "L018"
   },
   {
     "scenario_id": "SC06",
     "need_list": [
-      "kaşe kaban",
       "pileli etek",
-      "polo yaka tişört"
+      "blazer ceket",
+      "sandalet"
     ],
-    "budget": 3890.0,
-    "target_listing_id": "L022"
+    "budget": 2439.0,
+    "target_listing_id": "L023"
   },
   {
     "scenario_id": "SC07",
     "need_list": [
       "chino pantolon",
-      "kravat",
-      "klasik gömlek"
+      "klasik ayakkabı",
+      "kravat"
     ],
-    "budget": 1597.0,
+    "budget": 3001.0,
     "target_listing_id": "L026"
   },
   {
     "scenario_id": "SC08",
     "need_list": [
-      "abiye elbise",
-      "topuklu ayakkabı"
+      "clutch çanta",
+      "abiye elbise"
     ],
-    "budget": 6440.0,
-    "target_listing_id": "L029"
+    "budget": 5506.0,
+    "target_listing_id": "L031"
   },
   {
     "scenario_id": "SC09",
     "need_list": [
-      "eşofman üstü",
+      "koşu ayakkabısı",
       "spor tayt",
       "spor atlet",
-      "kargo şort"
+      "trençkot"
     ],
-    "budget": 1873.0,
-    "target_listing_id": "L036"
+    "budget": 3204.0,
+    "target_listing_id": "L035"
   },
   {
     "scenario_id": "SC10",
     "need_list": [
-      "erkek bot",
       "atkı bere",
       "erkek deri ceket",
-      "beyaz spor ayakkabı"
+      "erkek bot"
     ],
-    "budget": 3849.9,
-    "target_listing_id": "L038"
+    "budget": 499.9,
+    "target_listing_id": "L039"
   },
   {
     "scenario_id": "SC11",
     "need_list": [
-      "tote çanta",
       "trençkot",
-      "yürüyüş ayakkabısı"
+      "babet"
     ],
-    "budget": 2245.0,
-    "target_listing_id": "L042"
+    "budget": 2460.0,
+    "target_listing_id": "L040"
   },
   {
     "scenario_id": "SC12",
     "need_list": [
+      "yüksek bel kot pantolon",
       "midi elbise",
-      "keten gömlek",
-      "yüksek bel kot pantolon"
+      "deri ceket"
     ],
-    "budget": 1745.0,
-    "target_listing_id": "L004"
+    "budget": 2691.0,
+    "target_listing_id": "L002"
   },
   {
     "scenario_id": "SC13",
     "need_list": [
       "oversize tişört",
-      "slim fit kot pantolon",
       "kapüşonlu sweatshirt",
-      "spor atlet"
+      "slim fit kot pantolon",
+      "triko kazak"
     ],
-    "budget": 1411.0,
+    "budget": 1547.0,
     "target_listing_id": "L007"
   },
   {
     "scenario_id": "SC14",
     "need_list": [
       "yürüyüş ayakkabısı",
-      "siyah bot",
       "beyaz spor ayakkabı",
       "deri cüzdan"
     ],
