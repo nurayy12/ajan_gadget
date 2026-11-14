@@ -1,0 +1,150 @@
+[
+  {
+    "scenario_id": "SC01",
+    "need_list": [
+      "deri ceket",
+      "yüksek bel kot pantolon"
+    ],
+    "budget": 2071.0,
+    "target_listing_id": "L001"
+  },
+  {
+    "scenario_id": "SC02",
+    "need_list": [
+      "slim fit kot pantolon",
+      "kapüşonlu sweatshirt",
+      "erkek deri ceket"
+    ],
+    "budget": 1114.0,
+    "target_listing_id": "L005"
+  },
+  {
+    "scenario_id": "SC03",
+    "need_list": [
+      "sneaker",
+      "siyah bot",
+      "yürüyüş ayakkabısı"
+    ],
+    "budget": 5980.0,
+    "target_listing_id": "L010"
+  },
+  {
+    "scenario_id": "SC04",
+    "need_list": [
+      "sırt çantası",
+      "omuz çantası",
+      "el çantası"
+    ],
+    "budget": 2708.0,
+    "target_listing_id": "L014"
+  },
+  {
+    "scenario_id": "SC05",
+    "need_list": [
+      "ipek fular",
+      "kol saati",
+      "güneş gözlüğü"
+    ],
+    "budget": 1269.9,
+    "target_listing_id": "L018"
+  },
+  {
+    "scenario_id": "SC06",
+    "need_list": [
+      "blazer ceket",
+      "pileli etek",
+      "gri sneaker"
+    ],
+    "budget": 2113.0,
+    "target_listing_id": "L024"
+  },
+  {
+    "scenario_id": "SC07",
+    "need_list": [
+      "klasik ayakkabı",
+      "chino pantolon",
+      "kravat"
+    ],
+    "budget": 2641.0,
+    "target_listing_id": "L027"
+  },
+  {
+    "scenario_id": "SC08",
+    "need_list": [
+      "clutch çanta",
+      "şal"
+    ],
+    "budget": 982.0,
+    "target_listing_id": "L031"
+  },
+  {
+    "scenario_id": "SC09",
+    "need_list": [
+      "spor atlet",
+      "eşofman üstü",
+      "spor tayt"
+    ],
+    "budget": 1762.0,
+    "target_listing_id": "L034"
+  },
+  {
+    "scenario_id": "SC10",
+    "need_list": [
+      "atkı bere",
+      "erkek deri ceket",
+      "erkek bot",
+      "polo yaka tişört"
+    ],
+    "budget": 499.9,
+    "target_listing_id": "L039"
+  },
+  {
+    "scenario_id": "SC11",
+    "need_list": [
+      "babet",
+      "trençkot"
+    ],
+    "budget": 2251.0,
+    "target_listing_id": "L041"
+  },
+  {
+    "scenario_id": "SC12",
+    "need_list": [
+      "midi elbise",
+      "deri ceket"
+    ],
+    "budget": 1827.0,
+    "target_listing_id": "L004"
+  },
+  {
+    "scenario_id": "SC13",
+    "need_list": [
+      "su geçirmez mont",
+      "oversize tişört",
+      "slim fit kot pantolon",
+      "saten gömlek"
+    ],
+    "budget": 3389.0,
+    "target_listing_id": "L008"
+  },
+  {
+    "scenario_id": "SC14",
+    "need_list": [
+      "yürüyüş ayakkabısı",
+      "siyah bot",
+      "sneaker",
+      "şal"
+    ],
+    "budget": 1339.9,
+    "target_listing_id": "L011"
+  },
+  {
+    "scenario_id": "SC15",
+    "need_list": [
+      "el çantası",
+      "deri cüzdan"
+    ],
+    "budget": 1086.0,
+    "target_listing_id": "L016"
+  }
+]

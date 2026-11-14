@@ -1,0 +1,4 @@
+[
+  {"scenario_id": "T-SC1", "need_list": ["deri ceket", "kot pantolon"], "budget": 1600.0, "target_listing_id": "T1"},
+  {"scenario_id": "T-SC2", "need_list": ["deri ceket", "kot pantolon"], "budget": 1100.0, "target_listing_id": "T1"}
+]

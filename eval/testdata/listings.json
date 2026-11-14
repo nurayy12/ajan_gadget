@@ -1,0 +1,5 @@
+[
+  {"listing_id": "T1", "seller_id": "ts1", "title": "Test deri ceket", "description": "test", "category": "kadın giyim", "size": "M", "condition": "iyi", "list_price": 1000.0, "floor_price": 800.0, "shipping_cost": 50.0},
+  {"listing_id": "T2", "seller_id": "ts1", "title": "Test kot pantolon", "description": "test", "category": "kadın giyim", "size": "M", "condition": "iyi", "list_price": 500.0, "floor_price": 400.0, "shipping_cost": 50.0},
+  {"listing_id": "T3", "seller_id": "ts1", "title": "Test gömlek", "description": "test", "category": "kadın giyim", "size": "M", "condition": "iyi", "list_price": 300.0, "floor_price": 240.0, "shipping_cost": 50.0}
+]
