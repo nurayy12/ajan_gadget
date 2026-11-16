@@ -36,7 +36,9 @@ def buyer_report(result: NegotiationResult, listings: list[Listing]) -> str:
 
     if len(items) > 1:
         tier = bundle_discount_rate(len(items)) * 100
-        lines.append(f"Paket indirim kademesi: %{tier:g} ({len(items)} ürün)".replace(".", ","))
+        # %5/%10 alıcının aldığı indirim değil, satıcının paket alt sınırındaki esneklik;
+        # gerçekleşen indirim yukarıdaki "İndirim" satırındadır.
+        lines.append(f"Satıcının paket esnekliği: %{tier:g} ({len(items)} ürün; gerçekleşen indirim yukarıda)".replace(".", ","))
     shipping_text, shipping = _shipping_line(items, result.final_price)
     lines.append(shipping_text)
     paid_total = result.final_price + shipping

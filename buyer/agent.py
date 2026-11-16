@@ -10,15 +10,25 @@ from .text_utils import format_tl
 # Fiyat sayılabilecek sayılar: 3+ haneli sayı ya da yanında TL/lira/₺ olan sayı.
 _PRICE_LIKE = re.compile(r"\d{3,}|\d+\s*(?:tl|lira|₺)", re.IGNORECASE)
 
+# Değiştirmeden sonra mesajda kalan yer tutucu izi: çıplak "FIYAT" (büyük-küçük harf fark etmez,
+# tek başına kelime olarak; "Fiyatı" gibi ekli doğal Türkçe sözcükler eşleşmez) ya da süslü parantez.
+# Gemma bazen yer tutucuyu "{FIYAT}" yerine "FIYAT" diye yazıyor; hiçbir kural bunu yakalamıyordu.
+_PLACEHOLDER_LEFTOVER = re.compile(r"\bfiyat\b|[{}]", re.IGNORECASE)
+
 
 def _finalize_message(raw: str, price: float, is_bundle: bool, round_no: int) -> str:
-    """LLM mesajına kodun hesapladığı fiyatı koyar; LLM kendi fiyatını yazdıysa şablona döner."""
+    """LLM mesajına kodun hesapladığı fiyatı koyar.
+
+    LLM kendi fiyatını yazdıysa ya da değiştirmeden sonra mesajda çıplak FIYAT / süslü parantez
+    kaldıysa şablon mesaja döner.
+    """
     price_text = format_tl(price)
     if PLACEHOLDER in raw:
         message = raw.replace(PLACEHOLDER, price_text)
     else:
         message = raw.rstrip() + f" Teklifim: {price_text}."
-    if _PRICE_LIKE.search(message.replace(price_text, "")):
+    leftover = _PLACEHOLDER_LEFTOVER.search(message)
+    if leftover or _PRICE_LIKE.search(message.replace(price_text, "")):
         message = template_message(is_bundle, round_no).replace(PLACEHOLDER, price_text)
     return message
 
