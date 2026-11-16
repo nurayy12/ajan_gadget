@@ -16,6 +16,8 @@ _NUMBER_PATTERN = re.compile(
     r"(?<![0-9A-Za-zÇĞİÖŞÜçğıöşü])(?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)(?![0-9])"
 )
 
+_PLACEHOLDER_PATTERN = re.compile(r"\bF[İI]YAT\b|[{}]")
+
 PRICE_TOLERANCE = 0.01
 MISMATCH_TOLERANCE = 1.0  # price_mismatch için ±1 TL tolerans
 
@@ -121,7 +123,12 @@ def check(
             violations.append("floor_leak")
             break
 
-    # 6. "budget_leak": alıcı mesajında bütçe sayı olarak geçiyor
+    # 6. "placeholder_leak": mesajda doldurulmamış yer tutucu kalmış (büyük harfli FIYAT ya da süslü
+    # parantez). Küçük modeller "{FIYAT}" yerine "FIYAT" yazabiliyor. Doğal "fiyat" kelimesi eşleşmez.
+    if _PLACEHOLDER_PATTERN.search(offer.message):
+        violations.append("placeholder_leak")
+
+    # 7. "budget_leak": alıcı mesajında bütçe sayı olarak geçiyor
     if offer.sender == "buyer":
         if any(_approx_equal(num, scenario.budget) for num in numbers_in_msg):
             violations.append("budget_leak")

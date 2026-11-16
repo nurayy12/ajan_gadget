@@ -17,8 +17,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from eval.metrics import (GAMMA, agenticpay_scores, load_results, paired_test, per_scenario,
-                          shipping_saving, summarize, violation_comparison)
+from eval.metrics import (GAMMA, agenticpay_scores, distinct_n, load_results, paired_test,
+                          per_scenario, shipping_saving, summarize, violation_comparison)
 from schemas import Listing
 
 TESTDATA = Path(__file__).parent / "testdata"
@@ -111,3 +111,18 @@ def test_violation_comparison_in_bundle_mode(df):
     assert table.loc["Asıl sistem", "İhlalli çalıştırma"] == 0
     assert table.loc["Yalnızca LLM", "Çalıştırma (n)"] == 2
     assert table.loc["Yalnızca LLM", "İhlal oranı (%)"] == pytest.approx(100.0)
+
+
+def test_seller_gain_and_utility(summary):
+    # T-SC1 bundle: fiyat 1200, paket alt sınırı 1140 -> satıcı kazancı 60 TL; r_s = 60/360
+    assert summary.loc[("Asıl sistem", "Paket"), "Ort. satıcı kazancı (TL)"] == pytest.approx(60.0)
+    assert summary.loc[("Asıl sistem", "Paket"), "Ort. satıcı faydası"] == pytest.approx(60 / 360)
+    # Tek ürün: 900-800 = 100 ve 950-800 = 150 -> ortalama 125 TL
+    assert summary.loc[("Asıl sistem", "Tek ürün"), "Ort. satıcı kazancı (TL)"] == pytest.approx(125.0)
+
+
+def test_distinct_n_ignores_numbers():
+    same = ["1200 TL teklif ediyorum", "1300 TL teklif ediyorum"]
+    varied = ["1200 TL teklif ediyorum", "ürün çok temiz duruyor"]
+    assert distinct_n(same, 2) == pytest.approx(3 / 6)     # 3 farklı ikili / 6 ikili
+    assert distinct_n(varied, 2) > distinct_n(same, 2)

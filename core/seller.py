@@ -115,18 +115,146 @@ def round_val(val: float) -> float:
     return float(f"{val:.2f}")
 
 
+# --- Pazarlık stratejileri (satıcı) -------------------------------------------------------
+# Fiyatı kod hesaplar; her tur hangi gerekçenin kullanılacağını da kod seçer, LLM yalnızca o
+# gerekçeyle mesajı yazar. Strateji listesi Zhou ve ark. (2019) pazarlık stratejilerinden
+# uyarlandı (ürünü tanıtma, cazip anlatma, kaygı giderme, yan teklif, yumuşatma; DialoGraph,
+# Joshi ve ark., ICLR 2021, Tablo 7). Strateji ile metni ayırma: He ve ark. (EMNLP 2018).
+# Her stratejinin şablonları LLM hata verdiğinde ya da mock modda kullanılır; şablonlarda
+# fiyattan başka sayı yoktur ve uydurma iddia (ör. "başka alıcılar var") bulunmaz.
+SELLER_TACTICS: dict[str, dict] = {
+    "urun_tanit": {
+        "aciklama": "Ürünü tanıt: markasını ve durumunu ilan açıklamasındaki bilgilerle anlat.",
+        "sablonlar": [
+            "Merhaba, {urun} {durum} ve tertemiz. Bu hâliyle {fiyat} uygun bir fiyat.",
+            "Merhaba! {Urun} {durum}; fotoğraflarda gördüğünüz hâlinde. {fiyat}'ye verebilirim.",
+        ],
+    },
+    "cazip_anlat": {
+        "aciklama": "Ürünü daha çekici anlat: az kullanıldığını, temizliğini, yenisine göre avantajını vurgula.",
+        "sablonlar": [
+            "{Urun} {durum}, yenisine göre gerçekten avantajlı. {fiyat} yapabilirim.",
+            "{Urun} hâlâ çok güzel duruyor; {fiyat} hakkını veren bir fiyat.",
+        ],
+    },
+    "kaygi_gider": {
+        "aciklama": "Alıcının olası kaygısını gider: orijinal, defosuz olduğunu, istenirse ek fotoğraf atabileceğini söyle.",
+        "sablonlar": [
+            "İçiniz rahat olsun, {urun} orijinal ve defosuz. {fiyat}'nin altına inmem zor.",
+            "Herhangi bir kusuru yok, isterseniz ek fotoğraf da gönderirim. {fiyat} olur.",
+        ],
+    },
+    "yan_teklif": {
+        "aciklama": "Fiyat dışında bir kolaylık sun: aynı gün kargo, özenli paketleme; pakette hepsini tek kargoyla göndermek.",
+        "sablonlar": [
+            "{fiyat}'de anlaşırsak aynı gün özenle paketleyip kargoya veririm.",
+            "{fiyat} olursa hemen hazırlarım, özenle paketleyip gönderirim.",
+        ],
+        "sablonlar_paket": [
+            "Hepsini tek kolide, tek kargoyla gönderirim; {fiyat} olur.",
+            "Paket olarak alırsanız hepsini özenle tek pakette yollarım. {fiyat} yapabilirim.",
+        ],
+    },
+    "karsilik": {
+        "aciklama": "Alıcı teklifini yükseltti; karşılık verdiğini söyle: o yaklaştığı için sen de indiriyorsun.",
+        "sablonlar": [
+            "Siz yaklaşınca ben de iniyorum: {fiyat}.",
+            "Teklifinizi yükselttiğiniz için teşekkürler, ben de {fiyat}'ye iniyorum.",
+        ],
+    },
+    "yumusatma": {
+        "aciklama": "Kibarca biraz daha esneyebileceğini söyle.",
+        "sablonlar": [
+            "Biraz daha esneyebilirim, {fiyat} olur mu?",
+            "Sizin için {fiyat}'ye kadar inebilirim.",
+        ],
+    },
+    "son_fiyat": {
+        "aciklama": "Bunun son fiyatın olduğunu kibarca ama net söyle.",
+        "sablonlar": [
+            "Bu benim son fiyatım: {fiyat}. Uygunsa hemen hazırlayayım.",
+            "Daha fazla inemiyorum, son fiyatım {fiyat}.",
+        ],
+    },
+    "kabul": {
+        "aciklama": "Teklifi kabul et; sıcak bir kapanışla ürünü nasıl göndereceğini söyle.",
+        "sablonlar": [
+            "Anlaştık, {fiyat}! Özenle paketleyip en kısa sürede kargoya veriyorum.",
+            "Harika, {fiyat}'de anlaştık. Siparişinizi hemen hazırlıyorum.",
+        ],
+    },
+}
+_MIDDLE_TACTICS = ["cazip_anlat", "kaygi_gider", "yan_teklif", "yumusatma"]
+
+
+def _seed_key(bundle: list[Listing], round: int) -> str:
+    """Strateji ve şablon seçimi için tekrarlanabilir tohum: paketteki ilanlar + tur."""
+    return ",".join(sorted(item.listing_id for item in bundle)) + f":{round}"
+
+
+def _buyer_raised(history: list[Offer]) -> bool:
+    """Alıcının son teklifi bir önceki teklifinden yüksek mi (karşılık stratejisi için)."""
+    buyer_prices = [o.price for o in history if o.sender == "buyer"]
+    return len(buyer_prices) >= 2 and buyer_prices[-1] > buyer_prices[-2]
+
+
+def choose_seller_tactic(bundle: list[Listing], history: list[Offer], round: int,
+                         action: str = "counter") -> str:
+    """Satıcının bu turdaki pazarlık stratejisi (belirlenimci; aynı strateji arka arkaya seçilmez).
+
+    - kabul ederken "kabul", 5. turda "son_fiyat", 1. turda "urun_tanit"
+    - 2.-4. turda: cazip_anlat, kaygi_gider, yan_teklif, yumusatma ve alıcı teklifini
+      yükselttiyse karsilik arasından, bir önceki turun stratejisi hariç, tohumla seçilir.
+    """
+    if action == "accept":
+        return "kabul"
+    if round >= T_MAX:
+        return "son_fiyat"
+    if round <= 1:
+        return "urun_tanit"
+    previous_history = history[:-1] if history and history[-1].sender == "buyer" else history
+    previous = choose_seller_tactic(bundle, previous_history, round - 1)
+    candidates = list(_MIDDLE_TACTICS) + (["karsilik"] if _buyer_raised(history) else [])
+    candidates = [c for c in candidates if c != previous]
+    return random.Random(_seed_key(bundle, round)).choice(candidates)
+
+
+def _condition_text(bundle: list[Listing]) -> str:
+    """Şablon için durum ifadesi: tüm ürünlerin durumu aynıysa o, değilse "iyi durumda"."""
+    conditions = {item.condition for item in bundle}
+    condition = conditions.pop() if len(conditions) == 1 else "iyi"
+    return {"iyi": "iyi durumda"}.get(condition, condition)
+
+
+def _fill_template(template: str, bundle: list[Listing], price_str: str) -> str:
+    """Şablondaki {urun}/{Urun}/{durum}/{fiyat} alanlarını doldurur."""
+    plural = len(bundle) > 1
+    urun = "ürünler" if plural else "ürün"
+    return template.format(urun=urun, Urun=urun.capitalize(), durum=_condition_text(bundle),
+                           fiyat=f"{price_str} TL")
+
+
+def _tactic_templates(tactic: str, bundle: list[Listing]) -> list[str]:
+    spec = SELLER_TACTICS[tactic]
+    if len(bundle) > 1 and "sablonlar_paket" in spec:
+        return spec["sablonlar_paket"]
+    return spec["sablonlar"]
+
+
 def _build_seller_prompt(
     bundle: list[Listing],
     history: list[Offer],
     target_price: float,
     action: str,
+    tactic: str | None = None,
 ) -> str:
     """
     LLM için satıcı istemini (prompt) oluşturur.
     DİKKAT: Satıcının gizli alt sınırı (floor_price / bundle_floor) ASLA bu metne eklenmez!
     """
-    items_desc = ", ".join(
-        f"{item.title} ({item.condition}, Liste: {format_price_tr(item.list_price)} TL)"
+    items_desc = "; ".join(
+        f"{item.title} ({item.condition}, Liste: {format_price_tr(item.list_price)} TL). "
+        f"İlan açıklaması: {item.description}"
         for item in bundle
     )
     history_lines = []
@@ -148,18 +276,36 @@ def _build_seller_prompt(
             f"başka hiçbir sayı veya fiyat yazma."
         )
 
+    strategy_text = ""
+    if tactic in SELLER_TACTICS:
+        example = _fill_template(_tactic_templates(tactic, bundle)[0], bundle, price_str)
+        strategy_text = (
+            f"\nBu turdaki stratejin: {SELLER_TACTICS[tactic]['aciklama']}\n"
+            f"Örnek (aynısını yazma, kendi cümlelerinle yaz): {example}\n"
+            "Uydurma bilgi verme; yalnızca ilandaki bilgileri kullan. En çok 2 kısa cümle yaz."
+        )
     return (
         f"Sen Dolap tarzı ikinci el bir pazar yerinde satıcısın.\n"
         f"Satılan ürün(ler): {items_desc}\n"
         f"Geçmiş konuşma:\n{history_text}\n\n"
-        f"Görev: {instruction}"
+        f"Görev: {instruction}{strategy_text}"
     )
 
 
-def _template_seller_message(price_str: str, action: str) -> str:
-    if action == "accept":
-        return f"Teklifiniz uygun, {price_str} TL üzerinden anlaşalım."
-    return f"Ürünler çok temiz durumda, bu paket için {price_str} TL yapabilirim."
+def _template_seller_message(price_str: str, action: str, tactic: str | None = None,
+                             bundle: list[Listing] | None = None, round: int = 1) -> str:
+    """Stratejiye göre şablon mesaj (mock modda ve LLM hata verdiğinde).
+
+    Aynı stratejinin birkaç şablonundan biri tohumla seçilir; böylece yedek mesajlar da tekrar etmez.
+    Strateji ya da paket verilmezse eski davranış korunur.
+    """
+    if tactic is None or not bundle:
+        if action == "accept":
+            return f"Teklifiniz uygun, {price_str} TL üzerinden anlaşalım."
+        return f"Ürünler çok temiz durumda, bu paket için {price_str} TL yapabilirim."
+    options = _tactic_templates(tactic, bundle)
+    template = random.Random(_seed_key(bundle, round) + tactic).choice(options)
+    return _fill_template(template, bundle, price_str)
 
 
 def generate_seller_message(
@@ -167,6 +313,7 @@ def generate_seller_message(
     history: list[Offer],
     target_price: float,
     action: str,
+    round: int | None = None,
 ) -> str:
     """
     USE_MOCK_LLM=1 ise şablon mesaj döndürür.
@@ -179,11 +326,14 @@ def generate_seller_message(
 
     price_str = format_price_tr(target_price)
     use_mock = os.getenv("USE_MOCK_LLM", "0") == "1"
+    if round is None:  # verilmezse geçmişten çıkar: satıcının kaçıncı mesajı
+        round = sum(1 for o in history if o.sender == "seller") + 1
+    tactic = choose_seller_tactic(bundle, history, round, action)
 
     if use_mock:
-        return _template_seller_message(price_str, action)
+        return _template_seller_message(price_str, action, tactic, bundle, round)
 
-    prompt = _build_seller_prompt(bundle, history, target_price, action)
+    prompt = _build_seller_prompt(bundle, history, target_price, action, tactic)
     model_name = os.getenv("MODEL_NAME", DEFAULT_MODEL_NAME)
     api_key = os.getenv("ANTHROPIC_API_KEY")
 
@@ -204,7 +354,7 @@ def generate_seller_message(
                 time.sleep(LLM_BACKOFF_BASE * (2 ** attempt))
 
     _LAST_SELLER_LLM_FAILED = True
-    return _template_seller_message(price_str, action)
+    return _template_seller_message(price_str, action, tactic, bundle, round)
 
 
 def seller_turn(
@@ -234,7 +384,7 @@ def seller_turn(
     # Baarslag ve ark. (2014) "AC_next" kabul stratejisi: karşı teklif >= bu turun hedef fiyatı ise kabul et
     if last_buyer_offer is not None and last_buyer_offer.price >= target:
         deal_price = last_buyer_offer.price
-        msg = generate_seller_message(bundle, history, deal_price, action="accept")
+        msg = generate_seller_message(bundle, history, deal_price, action="accept", round=round)
         return Offer(
             sender="seller",
             round=round,
@@ -245,7 +395,7 @@ def seller_turn(
         )
 
     action_type = "counter" if last_buyer_offer is not None else "offer"
-    msg = generate_seller_message(bundle, history, target, action=action_type)
+    msg = generate_seller_message(bundle, history, target, action=action_type, round=round)
     return Offer(
         sender="seller",
         round=round,

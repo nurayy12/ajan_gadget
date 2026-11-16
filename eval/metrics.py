@@ -98,6 +98,9 @@ def load_results(results_path: str | Path, listings_path: str | Path,
       utility                   alıcı faydası r_b (AgenticPay)                 (geçerli anlaşmada)
       buyer_score, seller_score, global_score   AgenticPay skorları           (her çalıştırmada)
       ship_saving               paketin kargo tasarrufu (TL)                    (anlaşma varsa)
+      seller_gain               satıcının kendi alt sınırının üstündeki kazancı (TL) = fiyat - p_min
+      seller_utility            satıcı faydası r_s (AgenticPay)                (geçerli anlaşmada)
+      buyer_msgs, seller_msgs   tarafların mesaj metinleri (çeşitlilik ölçümü için)
     """
     listings = {l.listing_id: l for l in load_listings(listings_path)}
     scenarios = {s.scenario_id: s for s in load_scenarios(scenarios_path)}
@@ -125,14 +128,16 @@ def load_results(results_path: str | Path, listings_path: str | Path,
         deal = bool(res["deal"]) and price is not None
 
         nan = float("nan")
-        discount = utility = ship = nan
+        discount = utility = ship = seller_gain = seller_utility = nan
         in_zone = False
         if deal:
             discount = (list_total - price) / list_total
             in_zone = p_min - EPS <= price <= p_max + EPS
             ship = shipping_saving(items, price)
+            seller_gain = price - p_min
             if in_zone and p_max - p_min > EPS:
                 utility = (p_max - price) / (p_max - p_min)
+                seller_utility = 1.0 - utility
         buyer_s, seller_s, global_s = agenticpay_scores(deal, price, p_min, p_max, res["rounds"])
 
         rows.append({
@@ -142,6 +147,9 @@ def load_results(results_path: str | Path, listings_path: str | Path,
             "discount": discount, "in_zone": in_zone, "out_of_zone": deal and not in_zone,
             "utility": utility, "buyer_score": buyer_s, "seller_score": seller_s,
             "global_score": global_s, "ship_saving": ship, "rounds": res["rounds"],
+            "seller_gain": seller_gain, "seller_utility": seller_utility,
+            "buyer_msgs": [o["message"] for o in res["offers"] if o["sender"] == "buyer"],
+            "seller_msgs": [o["message"] for o in res["offers"] if o["sender"] == "seller"],
             "violations": res["violations"],
             "has_violation": any(v != LLM_ERROR for v in res["violations"]),
             "has_llm_error": LLM_ERROR in res["violations"],
@@ -183,7 +191,10 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
                 "Anlaşma oranı (%)": 100 * g["deal"].mean(),
                 "Ort. indirim (%)": 100 * g["discount"].mean(),
                 "Ort. alıcı faydası": g["utility"].mean(),
+                "Ort. satıcı kazancı (TL)": deals["seller_gain"].mean() if len(deals) else float("nan"),
+                "Ort. satıcı faydası": g["seller_utility"].mean(),
                 "AgenticPay alıcı skoru": g["buyer_score"].mean(),
+                "AgenticPay satıcı skoru": g["seller_score"].mean(),
                 "AgenticPay genel skor": g["global_score"].mean(),
                 "Ort. tur": g["rounds"].mean(),
                 "İhlal oranı (%)": 100 * g["has_violation"].mean(),
@@ -192,6 +203,45 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
                 "ZOPA'sız çalıştırma": int((~g["zopa"]).sum()),
                 "Ort. kargo tasarrufu (TL)": deals["ship_saving"].mean() if len(deals) else float("nan"),
             })
+    return pd.DataFrame(rows)
+
+
+def distinct_n(messages: list[str], n: int) -> float:
+    """distinct-n: farklı n-gram sayısı / toplam n-gram sayısı (Li ve ark. 2016, NAACL).
+
+    1'e yakınsa mesajlar çeşitli, 0'a yakınsa aynı kalıplar tekrarlanıyor demektir.
+    Sayılar ayrı bir simgeye çevrilir; yalnızca fiyatı değişen kalıp cümleler çeşitli sayılmasın.
+    """
+    import re
+    grams, total = set(), 0
+    for m in messages:
+        words = ["<sayı>" if re.fullmatch(r"[\d.,]+", w) else w
+                 for w in re.findall(r"[\wçğıöşüÇĞİÖŞÜ.,]+", m.lower())]
+        for i in range(len(words) - n + 1):
+            grams.add(tuple(words[i:i + n]))
+            total += 1
+    return len(grams) / total if total else float("nan")
+
+
+def message_diversity(df: pd.DataFrame) -> pd.DataFrame:
+    """Koşul ve taraf başına mesaj çeşitliliği: mesaj sayısı, benzersiz mesaj oranı, distinct-1/2.
+
+    Benzersiz oran hesaplanırken sayılar yok sayılır: "1200 TL teklif ediyorum" ile
+    "1300 TL teklif ediyorum" aynı kalıp sayılır.
+    """
+    import re
+    rows = []
+    for system in SYSTEMS:
+        for mode in MODES:
+            g = df[(df["system"] == system) & (df["mode"] == mode)]
+            for side, col in (("Alıcı", "buyer_msgs"), ("Satıcı", "seller_msgs")):
+                msgs = [m for ms in g[col] for m in ms]
+                if not msgs:
+                    continue
+                patterns = {re.sub(r"[\d.,]+", "<sayı>", m.lower()) for m in msgs}
+                rows.append({"Sistem": SYSTEM_LABELS[system], "Mod": MODE_LABELS[mode], "Taraf": side,
+                             "Mesaj": len(msgs), "Benzersiz kalıp (%)": 100 * len(patterns) / len(msgs),
+                             "distinct-1": distinct_n(msgs, 1), "distinct-2": distinct_n(msgs, 2)})
     return pd.DataFrame(rows)
 
 
@@ -421,6 +471,10 @@ def save_summary(df: pd.DataFrame, out_dir: str | Path) -> None:
              _to_markdown(violation_comparison(df)), "",
              "## Anlaşma alanı olmayan çalıştırmalar", "",
              _to_markdown(zopa) if not zopa.empty else "Tüm çalıştırmalarda anlaşma alanı var.", "",
+             "## Mesaj çeşitliliği", "",
+             _to_markdown(message_diversity(df)), "",
+             "Benzersiz kalıp: sayılar yok sayıldığında farklı mesaj oranı. distinct-n: farklı n-gram / "
+             "toplam n-gram (Li ve ark. 2016). Düşük değer, mesajların aynı kalıpla tekrarlandığını gösterir.", "",
              "## İhlal türleri", "",
              _to_markdown(violations.reset_index()) if not violations.empty else "İhlal yok.", "",
              *sensitivity_section(out_dir / "sensitivity.csv")]

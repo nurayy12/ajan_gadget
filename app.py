@@ -19,12 +19,13 @@ import streamlit as st
 from schemas import Listing, NegotiationResult, Offer, Scenario
 from data.generate import SHIPPING_TARIFF
 from data.validate import load_listings, match_need
-from policy import bundle_discount_rate, buyer_shipping
+from policy import bundle_discount_rate, bundle_floor, buyer_shipping, package_shipping
 
 # ---- GERÇEK FONKSİYONLAR -------------------------------------------------------
 from buyer.agent import buyer_turn
 from buyer.bundle import select_bundle
 from buyer.report import buyer_report
+from buyer.text_utils import format_tl
 from core.negotiation import run_negotiation as core_run_negotiation, approve
 # --------------------------------------------------------------------------------
 
@@ -124,16 +125,31 @@ def offer_shipping_text(items: list[Listing], price: float) -> str:
     if fee == 0:
         return "Kargo satıcıdan (sepet 400 TL ve üzeri)"
     if price >= 250:
-        return f"Kargo: {fee:.2f} TL (alıcı ile satıcı paylaşıyor)"
-    return f"Kargo: {fee:.2f} TL (sepet 250 TL altı, alıcı öder)"
+        return f"Kargo: {format_tl(fee)} (alıcı ile satıcı paylaşıyor)"
+    return f"Kargo: {format_tl(fee)} (sepet 250 TL altı, alıcı öder)"
+
+
+def seller_shipping_text(items: list[Listing], price: float) -> str:
+    """Satıcının gözünden kargo (Dolap kuralı): kim öder, satıcıya düşen pay ne kadar."""
+    full = package_shipping(items)
+    paid_by_buyer = buyer_shipping(items, price)
+    if paid_by_buyer == 0:
+        return f"Kargoyu sen ödüyorsun: {format_tl(full)} (sepet 400 TL ve üzeri)"
+    if price >= 250:
+        return f"Kargo paylaşımlı: alıcı {format_tl(paid_by_buyer)} öder, kalanı sende"
+    return "Kargoyu alıcı öder (sepet 250 TL altı)"
 
 
 def bundle_badge(items: list[Listing]) -> str:
-    """Paket kartı rozeti: satıcının paket indirim kademesi (2 ürün %5, 3+ ürün %10)."""
+    """Paket kartı rozeti: ürün sayısı ve satıcının paketteki pazarlık esnekliği.
+
+    Kademe (2 ürün %5, 3+ ürün %10) satıcının alt sınırındaki esnekliktir; alıcıya doğrudan
+    uygulanan bir indirim değildir. Gerçek indirim pazarlıkla belirlenir ve kartta ayrıca görünür.
+    """
     if len(items) < 2:
         return "Tek ürün"
-    return (f"Sepet teklifi: %{100 * bundle_discount_rate(len(items)):.0f} · "
-            f"istek listenden +{len(items) - 1} ürün")
+    return (f"Sepet teklifi: {len(items)} ürün (istek listenden +{len(items) - 1}) · "
+            f"satıcının paket esnekliği: %{100 * bundle_discount_rate(len(items)):.0f}")
 
 
 def render_chat(offers: list[Offer]) -> None:
@@ -143,7 +159,7 @@ def render_chat(offers: list[Offer]) -> None:
         with st.chat_message("user" if is_buyer else "assistant", avatar="🛍️" if is_buyer else "🏷️"):
             st.markdown(f"**{'Alıcı ajanı' if is_buyer else 'Satıcı ajanı'}** · {offer.round}. tur")
             st.write(offer.message)
-            st.caption(f"Teklif: {offer.price:.0f} TL")
+            st.caption(f"Teklif: {format_tl(offer.price)}")
 
 
 def render_listing_grid(listings: list[Listing], columns: int = 3) -> None:
@@ -155,7 +171,7 @@ def render_listing_grid(listings: list[Listing], columns: int = 3) -> None:
             st.markdown(f"**{l.title}**")
             st.caption(f"{l.category} · {l.size or 'standart'} · {l.condition} · satıcı {l.seller_id}")
             st.write(l.description)
-            st.markdown(f"**{l.list_price:.0f} TL** · {PACKAGE_NAMES.get(l.shipping_cost, '')} paket")
+            st.markdown(f"**{format_tl(l.list_price)}** · {PACKAGE_NAMES.get(l.shipping_cost, '')} paket")
 
 
 def status_text(offer: dict) -> str:
@@ -174,9 +190,11 @@ def render_offer_card(key: str, offer: dict, rank: int, report_fn, listings: lis
         st.markdown(f"#### {rank}. teklif · satıcı {offer['seller_id']} · {bundle_badge(offer['items'])}")
         st.write(" + ".join(l.title for l in offer["items"]))
         c1, c2, c3 = st.columns(3)
-        c1.metric("Liste toplamı", f"{offer['list_total']:.0f} TL")
-        c2.metric("Ödenecek (kargo dahil)", f"{offer['total_to_pay']:.0f} TL")
-        c3.metric("Kazanç (kargo dahil)", f"{offer['saving']:.0f} TL")
+        c1.metric("Liste toplamı", format_tl(offer["list_total"]))
+        c2.metric("Ödenecek (kargo dahil)", format_tl(offer["total_to_pay"]))
+        c3.metric("Kazanç (kargo dahil)", format_tl(offer["saving"]),
+                  f"%{100 * (offer['list_total'] - offer['result'].final_price) / offer['list_total']:.1f} indirim".replace(".", ","),
+                  delta_color="off")
         st.caption(offer["shipping_text"])
         with st.expander("Pazarlık mesajları ve ajan raporu"):
             render_chat(result.offers)
@@ -253,9 +271,17 @@ def seller_page(seller_id: str, approve_fn, listings: list[Listing]) -> None:
             with st.container(border=True):
                 st.markdown("#### " + " + ".join(l.title for l in offer["items"]))
                 st.caption(bundle_badge(offer["items"]) + " · " + offer["shipping_text"])
-                c1, c2 = st.columns(2)
-                c1.metric("Liste toplamı", f"{offer['list_total']:.0f} TL")
-                c2.metric("Ajanının anlaştığı fiyat", f"{result.final_price:.0f} TL")
+                # Satıcı kendi alt sınırını bilir; bu bilgi yalnızca satıcının kendi ekranında görünür,
+                # alıcı ekranında hiçbir yerde gösterilmez.
+                floor = bundle_floor(offer["items"])
+                gain = result.final_price - floor
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Liste toplamı", format_tl(offer["list_total"]))
+                c2.metric("Ajanının anlaştığı fiyat", format_tl(result.final_price))
+                c3.metric("Kârın (alt sınırının üstü)", format_tl(gain),
+                          f"%{100 * gain / floor:.1f}".replace(".", ",") if floor else None, delta_color="off")
+                st.caption(seller_shipping_text(offer["items"], result.final_price)
+                           + ". Platform komisyonu hesaba katılmadı.")
                 st.caption("Durum: " + status_text(offer))
                 with st.expander("Pazarlık mesajları"):
                     render_chat(result.offers)
