@@ -3,7 +3,8 @@ import pytest
 from schemas import Listing, Offer
 from buyer import llm
 from buyer.agent import _finalize_message, buyer_turn
-from buyer.bundle import bundle_shipping, select_bundle
+from buyer._policy import buyer_shipping
+from buyer.bundle import select_bundle
 from buyer.tests.fake_seller import fake_seller_turn, run_fake_negotiation
 from buyer.tests.sample_data import LISTINGS, make_scenario
 from buyer.text_utils import format_tl
@@ -34,7 +35,7 @@ def test_negotiation_ends_with_accept_and_respects_budget():
     last = result.offers[-1]
     assert result.deal and last.action == "accept" and last.round == 4
     assert result.final_price == pytest.approx(902.5)
-    assert result.final_price + bundle_shipping([ITEM], "X1") <= scenario.budget
+    assert result.final_price + buyer_shipping([ITEM], result.final_price) <= scenario.budget
 
 
 def test_buyer_never_offers_above_seller_last_price():
@@ -49,11 +50,11 @@ def test_buyer_never_offers_above_seller_last_price():
 
 
 def test_no_deal_when_seller_stays_above_limit():
-    scenario = make_scenario(700, target_listing_id="X1", need_list=["test ürünü"])  # sınır 650
+    scenario = make_scenario(700, target_listing_id="X1", need_list=["test ürünü"])  # sınır 700 (kargo 400 TL üstünde ücretsiz)
     result = run_fake_negotiation(scenario, [ITEM])
     assert result.deal is False and result.final_price is None
     assert result.rounds == 5
-    assert all(o.price <= 650 for o in result.offers if o.sender == "buyer")
+    assert all(o.price <= 700 for o in result.offers if o.sender == "buyer")
 
 
 def test_bundle_message_mentions_bulk_purchase():

@@ -1,6 +1,6 @@
 """Takımın 6 ihlal kodunun alıcı tarafı: alıcı bunları hiçbir durumda ihlal etmemeli.
 
-over_budget    alıcı teklifi + hedef ilanın kargosu, bütçeyi aşmamalı
+over_budget    alıcı teklifi + alıcının ödediği kargo (Dolap eşikleri), bütçeyi aşmamalı
 below_floor    (satıcı kuralı; alıcıyı ilgilendirmez)
 round_limit    tur numarası 5'i geçmemeli
 price_mismatch mesajda yazan fiyat, kodun fiyatı olmalı (ve mesajda fiyat yazmalı)
@@ -13,7 +13,8 @@ import re
 
 import pytest
 
-from buyer.bundle import bundle_shipping, select_bundle
+from buyer._policy import buyer_shipping
+from buyer.bundle import select_bundle
 from buyer.tests.fake_seller import run_fake_negotiation
 from buyer.tests.sample_data import LISTINGS, make_scenario
 from buyer.text_utils import format_tl
@@ -84,9 +85,8 @@ def test_leak_check_ignores_own_price_but_catches_others():
 @pytest.mark.parametrize("budget", BUDGETS)
 def test_over_budget(budget, target, mode):
     scenario, bundle, result = run(budget, target, mode)
-    shipping = bundle_shipping(bundle, target)
     for offer in buyer_offers(result):
-        assert offer.price + shipping <= budget + 1e-9
+        assert offer.price + buyer_shipping(bundle, offer.price) <= budget + 1e-9
 
 
 @pytest.mark.parametrize("mode", ["single", "bundle"])

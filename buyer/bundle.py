@@ -3,28 +3,37 @@ from itertools import combinations
 
 from schemas import Listing, Scenario
 
-from .config import START_FRACTION
+from . import config
+from ._policy import buyer_shipping, package_shipping
 from .matching import _match_per_need
 
+MAX_BASKET_ITEMS = 10  # Dolap sepeti en fazla 10 ürün alır (Dolap yardım sayfaları)
 
-def bundle_shipping(bundle: list[Listing], target_listing_id: str) -> float:
-    """Paketin tek kargo ücreti = asıl istenen (hedef) ilanın kargo ücreti.
 
-    Paket, hedef ilanı tek başına almışız gibi aynı kargoyu öder; böylece tek ürün ve
-    paket karşılaştırmasına kargo farkı karışmaz. Kural katmanı da aynı kuralı kullanmalı.
+def bundle_shipping(bundle: list[Listing], target_listing_id: str | None = None) -> float:
+    """Sepetin kargo ücreti (indirimsiz) = policy.package_shipping = en yüksek kargo ücreti.
+
+    Başka modüllerin çağrıları bozulmasın diye bu ad ve ikinci parametre korunur;
+    target_listing_id artık kullanılmaz. Alıcının gerçekten ödediği kargo fiyata bağlıdır
+    (policy.buyer_shipping).
     """
-    if not bundle:
-        return 0.0
-    for listing in bundle:
-        if listing.listing_id == target_listing_id:
-            return listing.shipping_cost
-    raise ValueError(f"Hedef ilan pakette yok: {target_listing_id}")
+    return package_shipping(bundle)
+
+
+def bundle_feasible(items: list[Listing], budget: float) -> bool:
+    """Paket bütçeye sığar mı: alıcının ilk teklifi + o fiyata düşen kargo <= bütçe.
+
+    ilk teklif = config.START_FRACTION x liste toplamı (çağrı anında okunur).
+    """
+    opening = round(config.START_FRACTION * sum(l.list_price for l in items), 2)
+    return opening + buyer_shipping(items, opening) <= budget
 
 
 def select_bundle(scenario: Scenario, listings: list[Listing], mode: str) -> list[Listing]:
     """mode="single": yalnızca hedef ilan.
-    mode="bundle": hedef ilanı içeren, alıcının ilk teklifi (liste toplamının %70'i) + tek kargo bütçeyi aşmayan ve en çok
-    ihtiyaç maddesini karşılayan alt küme. Eşitlikte az ürünlü, o da eşitse ucuz olan seçilir.
+    mode="bundle": hedef ilanı içeren, en fazla MAX_BASKET_ITEMS ürünlük, bundle_feasible olan
+    (ilk teklif + kargo bütçeyi aşmayan) ve en çok ihtiyaç maddesini karşılayan alt küme.
+    Eşitlikte az ürünlü, o da eşitse ucuz olan seçilir.
     Hiçbir paket bütçeye sığmazsa yalnızca hedef ilan döner.
     """
     by_id = {l.listing_id: l for l in listings}
@@ -54,11 +63,11 @@ def select_bundle(scenario: Scenario, listings: list[Listing], mode: str) -> lis
 
     best: list[Listing] | None = None
     best_key = None
-    for size in range(len(others) + 1):
+    for size in range(min(len(others), MAX_BASKET_ITEMS - 1) + 1):
         for combo in combinations(others, size):
             items = [target, *combo]
             list_total = sum(l.list_price for l in items)
-            if START_FRACTION * list_total + target.shipping_cost > scenario.budget:
+            if not bundle_feasible(items, scenario.budget):
                 continue
             covered: set[int] = set()
             for l in items:
