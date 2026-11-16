@@ -62,7 +62,8 @@ def test_bundle_message_mentions_bulk_purchase():
     bundle = select_bundle(scenario, LISTINGS, "bundle")
     offer = buyer_turn(scenario, bundle, [], 1)
     assert len(offer.listing_ids) == 3
-    assert "toplu" in offer.message.lower() or "paket" in offer.message.lower()
+    msg = offer.message.lower()
+    assert any(w in msg for w in ("birlikte", "tek kargo", "tek seferde", "tek paket"))
 
 
 def test_accept_uses_sellers_price():
@@ -102,9 +103,8 @@ def test_mock_mode_never_calls_api(monkeypatch):
 
 @pytest.mark.parametrize("raw", [
     "Fiyatı: FIYAT. Teklifim: {FIYAT}",
-    "Merhaba, fiyat olur mu? {FIYAT}",
     "Merhaba, FIYAT olur mu?",
-    "Merhaba, Fiyat TL olur mu? {FIYAT}",
+    "Merhaba, FİYAT olur mu? {FIYAT}",
     "Merhaba, {FIYAT} ve {FIYAT2} olur mu?",
     "Merhaba, { olur mu? {FIYAT}",
 ])
@@ -115,7 +115,13 @@ def test_leftover_placeholder_falls_back_to_template(raw):
     assert "{" not in msg and "}" not in msg
 
 
-def test_natural_turkish_fiyat_words_are_kept():
-    # "fiyatı", "fiyatınız" gibi ekli sözcükler yer tutucu sayılmaz.
-    raw = "Merhaba, fiyatınız biraz yüksek; {FIYAT} olur mu?"
-    assert _finalize_message(raw, 760, False, 1) == "Merhaba, fiyatınız biraz yüksek; 760 TL olur mu?"
+@pytest.mark.parametrize("raw", [
+    "Bu fiyat bana biraz yüksek geldi, {FIYAT} olabilir mi?",
+    "Fiyat konusunda biraz esneyebilir misiniz?",
+    "Merhaba, fiyatınız biraz yüksek; {FIYAT} olur mu?",
+])
+def test_natural_turkish_fiyat_words_are_not_caught(raw):
+    # Küçük harfli ya da yalnızca baş harfi büyük "fiyat" doğal Türkçe sözcüktür; şablona düşmemeli.
+    msg = _finalize_message(raw, 760, False, 1)
+    assert msg.startswith(raw.split("{FIYAT}")[0])
+    assert "760 TL" in msg
