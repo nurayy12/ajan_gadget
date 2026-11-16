@@ -13,7 +13,7 @@ ITEM = Listing(listing_id="X1", seller_id="sx", title="Test ürünü", descripti
                size=None, condition="iyi", list_price=1000, floor_price=800, shipping_cost=50)
 
 
-def test_first_turn_is_offer_with_code_price():
+def test_first_turn_is_offer_with_code_price(no_buffer):
     scenario = make_scenario(2000, target_listing_id="X1", need_list=["test ürünü"])
     offer = buyer_turn(scenario, [ITEM], [], 1)
     assert offer.sender == "buyer" and offer.round == 1

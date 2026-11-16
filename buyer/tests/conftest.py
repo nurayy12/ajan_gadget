@@ -13,3 +13,11 @@ def _mock_llm(monkeypatch):
     """
     monkeypatch.setenv("USE_MOCK_LLM", "1")
     monkeypatch.setitem(sys.modules, "policy", fake_policy)
+
+
+@pytest.fixture
+def no_buffer(monkeypatch):
+    """Sızıntı payını (u) sıfırlar; tam sayı bekleyen testler için."""
+    from buyer import config
+    monkeypatch.setattr(config, "PRIVACY_BUFFER_MIN", 0.0)
+    monkeypatch.setattr(config, "PRIVACY_BUFFER_MAX", 0.0)
