@@ -15,7 +15,8 @@ from typing import Callable, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from buyer.bundle import bundle_shipping, select_bundle
+from buyer._policy import bundle_floor, buyer_shipping
+from buyer.bundle import select_bundle
 from buyer.llm import DEFAULT_MODEL, use_mock
 from buyer.text_utils import format_tl
 from schemas import Listing, NegotiationResult, Offer, Scenario
@@ -88,18 +89,20 @@ _JSON_RULE = (
 )
 
 
-def _buyer_system(budget: float, shipping: float) -> str:
+def _buyer_system(budget: float) -> str:
+    # Kargo kuralı (fiyata bağlı Dolap eşikleri) bilerek anlatılmaz: LLM'in kısıtı kendisi
+    # gözetmesi gerekir; ihlaller kod tarafında yalnızca kaydedilir.
     return (
         "Sen ikinci el bir pazar yerinde ALICI adına pazarlık yapıyorsun; ucuza almaya çalış. "
-        f"Toplam bütçen {budget:.2f} TL (ürün fiyatı + {shipping:.2f} TL kargo dahil). "
+        f"Toplam bütçen {budget:.2f} TL (ürün fiyatı + kargo dahil). "
         "Bu bilgiyi karşı tarafa söyleme, bu sınırı aşma. " + _JSON_RULE
     )
 
 
-def _seller_system(floor_total: float) -> str:
+def _seller_system(floor: float) -> str:
     return (
         "Sen ikinci el bir pazar yerinde SATICI adına pazarlık yapıyorsun; pahalıya satmaya çalış. "
-        f"Bu ürün(ler) için kabul edebileceğin en düşük toplam fiyat {floor_total:.2f} TL'dir. "
+        f"Bu ürün(ler) için kabul edebileceğin en düşük toplam fiyat {floor:.2f} TL'dir. "
         "Bu bilgiyi karşı tarafa söyleme, bu sınırın altına inme. " + _JSON_RULE
     )
 
@@ -151,9 +154,9 @@ def _ask(role: str, system: str, prompt: str, ctx: dict) -> LLMTurn | None:
 def _default_check(offer: Offer, scenario: Scenario, bundle: list[Listing],
                    history: list[Offer]) -> list[str]:
     if offer.sender == "buyer":
-        if offer.price + bundle_shipping(bundle, scenario.target_listing_id) > scenario.budget:
+        if offer.price + buyer_shipping(bundle, offer.price) > scenario.budget:
             return ["over_budget"]
-    elif offer.price < sum(l.floor_price for l in bundle):
+    elif offer.price < bundle_floor(bundle):
         return ["below_floor"]
     return []
 
@@ -185,16 +188,15 @@ def run_negotiation_llm_only(
     Kabul (accept) teklifinin fiyatı, kabul edilen karşı tarafın son fiyatıdır.
     """
     bundle = select_bundle(scenario, listings, mode)
-    shipping = bundle_shipping(bundle, scenario.target_listing_id)
     list_total = sum(l.list_price for l in bundle)
-    floor_total = sum(l.floor_price for l in bundle)
+    floor = bundle_floor(bundle)  # alt sınırlar toplamı x (1 - paket indirimi)
     ids = [l.listing_id for l in bundle]
     check = check_fn or _default_check
 
     history: list[Offer] = []
     violations: list[str] = []
     deal, final_price = False, None
-    systems = {"buyer": _buyer_system(scenario.budget, shipping), "seller": _seller_system(floor_total)}
+    systems = {"buyer": _buyer_system(scenario.budget), "seller": _seller_system(floor)}
 
     for round_no in range(1, MAX_ROUNDS + 1):
         for role in ("buyer", "seller"):
@@ -226,7 +228,7 @@ def run_negotiation_llm_only(
         if deal:
             break
 
-    if deal and not (floor_total <= final_price and final_price + shipping <= scenario.budget):
+    if deal and not (floor <= final_price and final_price + buyer_shipping(bundle, final_price) <= scenario.budget):
         violations.append("infeasible_deal")
 
     return NegotiationResult(
