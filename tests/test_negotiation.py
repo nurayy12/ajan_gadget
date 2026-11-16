@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import os
 from typing import Callable, Literal
 import pytest
 from schemas import Listing, Offer, Scenario
+from policy import bundle_floor
+import core.seller as seller_mod
+from core.seller import seller_target_price
 from core.engine import approve, run_negotiation
 
 
-# 3 ilanlık sabit paket (Liste toplamı = 2000 TL, Alt sınır toplamı = 1500 TL, Kargo = 50 TL)
+# 3 ilanlık sabit paket (Liste toplamı = 2000 TL, Ham alt sınır = 1500 TL,
+# 3 ürün için bundle_floor = 1500 * 0.90 = 1350 TL, Kargo = 50 TL)
 FIXED_BUNDLE: list[Listing] = [
     Listing(
         listing_id="B1",
@@ -64,7 +67,6 @@ def make_fake_buyer_turn(
 ) -> Callable[[Scenario, list[Listing], list[Offer], int], Offer]:
     """
     Önceden yazılmış teklifleri sırayla gönderen sahte bir fake_buyer_turn üretir.
-    (Retry durumunda da sıradaki teklifi verir; liste biterse son teklifi tekrarlar.)
     """
     idx = 0
 
@@ -95,20 +97,37 @@ def set_mock_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("USE_MOCK_LLM", "1")
 
 
+def test_seller_beta_and_behavioral_privacy_buffer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    - SELLER_BETA varsayılan olarak 0.2 olmalı ve çağrı anında modülden okunmalı.
+    - 5. turdaki satıcı hedef fiyatı bundle_floor * (1 + u), u ~ U(0.01, 0.03) aralığında
+      ve aynı (scenario_id, mode) için tekrarlanabilir (deterministik) olmalı.
+    """
+    assert seller_mod.SELLER_BETA == 0.2
+    eff_floor = bundle_floor(FIXED_BUNDLE)  # 1350.0
+
+    p5_a = seller_target_price(FIXED_BUNDLE, 5, scenario_id="SC_SEED_1", mode="bundle")
+    p5_b = seller_target_price(FIXED_BUNDLE, 5, scenario_id="SC_SEED_1", mode="bundle")
+    assert p5_a == p5_b
+    assert eff_floor * 1.01 - 1.0 <= p5_a <= eff_floor * 1.03 + 2.0
+    assert p5_a > eff_floor  # Asla bundle_floor'un altına inmez
+
+    # SELLER_BETA çalışma anında değiştirildiğinde (eval/ duyarlılık analizi) anında etkili olmalı
+    p3_boulware = seller_target_price(FIXED_BUNDLE, 3, scenario_id="SC_SEED_1", mode="bundle")
+    monkeypatch.setattr(seller_mod, "SELLER_BETA", 1.0)
+    p3_linear = seller_target_price(FIXED_BUNDLE, 3, scenario_id="SC_SEED_1", mode="bundle")
+    assert p3_linear < p3_boulware
+
+
 def test_negotiation_ends_with_deal() -> None:
     """
     Senaryo 1: Anlaşmayla biten pazarlık.
-    3 ilanlık paket: Liste = 2000, Alt sınır = 1500.
-    Satıcı hedef fiyatları (beta=0.5, T=5):
-      Tur 1: 2000 + (1500 - 2000) * (1/5)^2 = 1980 TL
-      Tur 2: 2000 + (1500 - 2000) * (2/5)^2 = 1920 TL
-      Tur 3: 2000 + (1500 - 2000) * (3/5)^2 = 1820 TL
-    Alıcı 3. turda 1850 TL teklif eder (1850 >= 1820 olduğu için satıcı kabul eder).
+    Alıcı 3. turda satıcının 3. tur hedef fiyatının üzerinde (1950 TL) teklif verir ve anlaşma sağlanır.
     """
     scenario = Scenario(
         scenario_id="SC_DEAL",
         need_list=["deri ceket", "kot pantolon", "kemer"],
-        budget=1950.0,  # Kargo (50) dahil -> ürünlere en fazla 1900 TL
+        budget=1980.0,  # p >= 400 için alıcı kargosu 0 TL
         target_listing_id="B1",
     )
     scripted = [
@@ -117,8 +136,8 @@ def test_negotiation_ends_with_deal() -> None:
             round=1,
             action="offer",
             listing_ids=["B1", "B2", "B3"],
-            price=1600.0,
-            message="Merhaba, 3 ürün için 1.600 TL teklif ediyorum.",
+            price=1550.0,
+            message="Merhaba, 3 ürün için 1.550 TL teklif ediyorum.",
         ),
         Offer(
             sender="buyer",
@@ -133,8 +152,8 @@ def test_negotiation_ends_with_deal() -> None:
             round=3,
             action="counter",
             listing_ids=["B1", "B2", "B3"],
-            price=1850.0,
-            message="Son olarak 1.850 TL verebilirim.",
+            price=1955.0,
+            message="Son olarak 1.955 TL verebilirim.",
         ),
     ]
 
@@ -148,7 +167,7 @@ def test_negotiation_ends_with_deal() -> None:
     )
 
     assert result.deal is True
-    assert result.final_price == 1850.0
+    assert result.final_price == 1955.0
     assert result.rounds == 3
     assert result.violations == []
     assert result.offers[-1].sender == "seller"
@@ -158,20 +177,20 @@ def test_negotiation_ends_with_deal() -> None:
 def test_negotiation_no_deal_after_5_rounds() -> None:
     """
     Senaryo 2: 5 turda anlaşmasız biten pazarlık.
-    Alıcı 5 tur boyunca satıcının hedef fiyatlarının altında teklif verir ve kabul etmez.
+    Alıcı 5 tur boyunca satıcının indirimli alt sınırının (bundle_floor = 1350 TL) altında teklif verir.
     """
     scenario = Scenario(
         scenario_id="SC_NO_DEAL",
         need_list=["deri ceket", "kot pantolon", "kemer"],
-        budget=1600.0,  # Kargo 50 -> en fazla 1550
+        budget=1450.0,
         target_listing_id="B1",
     )
     scripted = [
-        Offer(sender="buyer", round=1, action="offer", listing_ids=[], price=1200.0, message="1200 TL olur mu?"),
-        Offer(sender="buyer", round=2, action="counter", listing_ids=[], price=1250.0, message="1250 TL vereyim."),
-        Offer(sender="buyer", round=3, action="counter", listing_ids=[], price=1300.0, message="1300 TL teklifimdir."),
-        Offer(sender="buyer", round=4, action="counter", listing_ids=[], price=1350.0, message="1350 TL yapalım."),
-        Offer(sender="buyer", round=5, action="counter", listing_ids=[], price=1400.0, message="Son 1400 TL çalışır."),
+        Offer(sender="buyer", round=1, action="offer", listing_ids=[], price=1100.0, message="1100 TL olur mu?"),
+        Offer(sender="buyer", round=2, action="counter", listing_ids=[], price=1150.0, message="1150 TL vereyim."),
+        Offer(sender="buyer", round=3, action="counter", listing_ids=[], price=1200.0, message="1200 TL teklifimdir."),
+        Offer(sender="buyer", round=4, action="counter", listing_ids=[], price=1250.0, message="1250 TL yapalım."),
+        Offer(sender="buyer", round=5, action="counter", listing_ids=[], price=1300.0, message="Son 1300 TL çalışır."),
     ]
 
     result = run_negotiation(
@@ -192,25 +211,21 @@ def test_negotiation_no_deal_after_5_rounds() -> None:
 def test_negotiation_with_violations_and_approval_flow() -> None:
     """
     Senaryo 3: İhlal içeren pazarlık (ve auto_approve=False ile approve() kontrolü).
-    - Tur 1'de alıcı ilk denemede hem bütçeyi aşar (over_budget) hem de mesajda farklı fiyat yazar (price_mismatch).
-    - Motor ihlalleri result.violations'a kaydeder ve buyer_turn'ü yeniden çağırır.
-    - İkinci denemede de bütçe sızıntısı (budget_leak) yapılınca motor sabit güvenli şablon mesaj kullanır.
-    - Tur 2'de alıcı 1920 TL (satıcının Tur 2 hedefi) teklif ederek anlaşma sağlar.
     """
     scenario = Scenario(
         scenario_id="SC_VIOLATION",
         need_list=["deri ceket", "kot pantolon", "kemer"],
-        budget=2000.0,  # Kargo 50 -> ürün için üst sınır 1950 TL
+        budget=2000.0,
         target_listing_id="B1",
     )
     scripted = [
-        # Tur 1 - Deneme 1: 1980 + 50 = 2030 > 2000 (over_budget) ve mesajda 1700 yazıyor (price_mismatch)
+        # Tur 1 - Deneme 1: 2050 > 2000 (over_budget) ve mesajda yabancı fiyat 1700 yazıyor (price_mismatch)
         Offer(
             sender="buyer",
             round=1,
             action="offer",
             listing_ids=[],
-            price=1980.0,
+            price=2050.0,
             message="Bu paket için 1700 TL veririm.",
         ),
         # Tur 1 - Deneme 2 (Retry): Bütçe olan 2000 sayısını mesajda sızdırıyor (budget_leak)
@@ -222,14 +237,14 @@ def test_negotiation_with_violations_and_approval_flow() -> None:
             price=1700.0,
             message="Toplam bütçem 2000 TL, ürünlere 1700 TL teklif ediyorum.",
         ),
-        # Tur 2 - Geçerli teklif: 1920 TL (satıcının 2. tur hedefi 1920 TL olduğu için kabul edilir)
+        # Tur 2 - Geçerli teklif: 1995 TL (satıcının 2. tur hedefi >= olduğu için kabul edilir)
         Offer(
             sender="buyer",
             round=2,
             action="counter",
             listing_ids=[],
-            price=1920.0,
-            message="Peki, paket için 1.920 TL teklif ediyorum.",
+            price=1995.0,
+            message="Peki, paket için 1.995 TL teklif ediyorum.",
         ),
     ]
 
@@ -242,25 +257,20 @@ def test_negotiation_with_violations_and_approval_flow() -> None:
         buyer_turn_fn=make_fake_buyer_turn(scripted),
     )
 
-    # İhlaller yakalanmış olmalı
     assert "over_budget" in result.violations
     assert "price_mismatch" in result.violations
     assert "budget_leak" in result.violations
 
-    # İlk turdaki alıcı mesajı şablon ile temizlenmiş olmalı
     assert result.offers[0].price == 1700.0
     assert "2000" not in result.offers[0].message
 
-    # auto_approve=False olduğu için henüz deal=False ama final_price=1920.0 hazır
     assert result.deal is False
-    assert result.final_price == 1920.0
+    assert result.final_price == 1995.0
 
-    # İnsan onayı (approve): iki taraf da onayladığında deal=True olur
     approved = approve(result, buyer_ok=True, seller_ok=True)
     assert approved.deal is True
-    assert approved.final_price == 1920.0
+    assert approved.final_price == 1995.0
 
-    # Bir taraf reddederse deal=False ve final_price=None olur
     rejected = approve(result, buyer_ok=True, seller_ok=False)
     assert rejected.deal is False
     assert rejected.final_price is None
@@ -283,8 +293,8 @@ def test_trace_path_writes_jsonl(tmp_path: pytest.TempPathFactory) -> None:
             round=1,
             action="offer",
             listing_ids=["B1"],
-            price=990.0,
-            message="Merhaba, ceket için 990 TL teklif ediyorum.",
+            price=1000.0,
+            message="Merhaba, ceket için 1000 TL teklif ediyorum.",
         ),
     ]
     result = run_negotiation(
@@ -306,8 +316,6 @@ def test_trace_path_writes_jsonl(tmp_path: pytest.TempPathFactory) -> None:
 
 def test_llm_retry_and_fallback_records_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """LLM 3 denemede de hata verdiğinde şablona düşmeli ve violations'a 'llm_error' yazılmalı."""
-    import core.seller as seller_mod
-
     monkeypatch.setenv("USE_MOCK_LLM", "0")
     monkeypatch.setattr(seller_mod, "LLM_BACKOFF_BASE", 0.0)
 
@@ -339,8 +347,8 @@ def test_llm_retry_and_fallback_records_llm_error(monkeypatch: pytest.MonkeyPatc
             round=1,
             action="offer",
             listing_ids=["B1"],
-            price=990.0,
-            message="Ceket için 990 TL veririm.",
+            price=1000.0,
+            message="Ceket için 1000 TL veririm.",
         ),
     ]
     result = run_negotiation(
@@ -355,5 +363,4 @@ def test_llm_retry_and_fallback_records_llm_error(monkeypatch: pytest.MonkeyPatc
     assert call_count == 3  # Tam 3 kez yeniden denemiş olmalı
     assert "llm_error" in result.violations
     assert result.deal is True
-    assert "990" in result.offers[-1].message
-
+    assert "1000" in result.offers[-1].message

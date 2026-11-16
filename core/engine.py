@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 from typing import Callable, Literal
 from schemas import Listing, NegotiationResult, Offer, Scenario
-from core.rules import bundle_shipping_cost, check
+from policy import bundle_floor, buyer_shipping, max_affordable_price
+from core.rules import check
 from core.seller import format_price_tr, pop_seller_llm_error, seller_turn, T_MAX
 
 
@@ -54,22 +55,21 @@ def _sanitize_offer_with_template(
 ) -> Offer:
     """
     İkinci denemede de kural ihlali devam ederse:
-    - Fiyat sınır dışıysa güvenli sınıra çeker (bütçe veya alt sınır).
+    - Fiyat sınır dışıysa güvenli sınıra çeker (max_affordable_price veya bundle_floor).
     - Sabit, temiz bir Türkçe şablon mesaj yazar.
     """
-    shipping = bundle_shipping_cost(bundle, scenario.target_listing_id)
-    total_floor = sum(item.floor_price for item in bundle)
+    eff_floor = bundle_floor(bundle)
     safe_price = offer.price
 
     if offer.sender == "buyer":
-        max_allowed = max(0.0, scenario.budget - shipping)
-        if safe_price > max_allowed:
+        max_allowed = max_affordable_price(bundle, scenario.budget)
+        if safe_price + buyer_shipping(bundle, safe_price) > scenario.budget + 0.01:
             safe_price = max_allowed
         if abs(safe_price - scenario.budget) < 0.02:
-            safe_price = max(0.0, safe_price - 1.0)
+            safe_price = max(0.0, round(safe_price - 1.0, 2))
     else:
-        if safe_price < total_floor:
-            safe_price = total_floor + 1.0
+        if safe_price < eff_floor:
+            safe_price = round(eff_floor + 1.0, 2)
 
     safe_round = min(max(1, offer.round), T_MAX)
     price_str = format_price_tr(safe_price)
@@ -112,6 +112,20 @@ def _append_trace(
     }
     with open(p, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _call_seller(
+    s_fn: Callable[..., Offer],
+    bundle: list[Listing],
+    history: list[Offer],
+    round_no: int,
+    scenario_id: str,
+    mode: str,
+) -> Offer:
+    """Varsayılan seller_turn ise scenario_id ve mode geçirir, özel 3 argümanlı fonksiyonsa 3 argümanla çağırır."""
+    if s_fn is seller_turn:
+        return seller_turn(bundle, history, round_no, scenario_id=scenario_id, mode=mode)
+    return s_fn(bundle, history, round_no)
 
 
 def approve(
@@ -179,7 +193,6 @@ def run_negotiation(
         if b_violations:
             all_violations.extend(b_violations)
             b_turn_violations.extend(b_violations)
-            # 1 kez yeniden ürettir
             b_offer_retry = b_fn(scenario, bundle, history, r)
             b_violations_retry = check(b_offer_retry, scenario, bundle, history)
             if b_violations_retry:
@@ -200,8 +213,8 @@ def run_negotiation(
 
         # --- 2. SATICI TURU ---
         s_turn_violations: list[str] = []
-        pop_seller_llm_error()  # Önceki durumu temizle
-        s_offer = s_fn(bundle, history, r)
+        pop_seller_llm_error()
+        s_offer = _call_seller(s_fn, bundle, history, r, scenario.scenario_id, mode)
         if pop_seller_llm_error():
             all_violations.append("llm_error")
             s_turn_violations.append("llm_error")
@@ -210,8 +223,7 @@ def run_negotiation(
         if s_violations:
             all_violations.extend(s_violations)
             s_turn_violations.extend(s_violations)
-            # 1 kez yeniden ürettir
-            s_offer_retry = s_fn(bundle, history, r)
+            s_offer_retry = _call_seller(s_fn, bundle, history, r, scenario.scenario_id, mode)
             if pop_seller_llm_error():
                 all_violations.append("llm_error")
                 s_turn_violations.append("llm_error")
@@ -232,13 +244,12 @@ def run_negotiation(
         if s_offer.action == "reject":
             break
 
-    # Sınırlar içinde geçerli bir anlaşma olup olmadığını doğrula
-    shipping = bundle_shipping_cost(bundle, scenario.target_listing_id)
-    total_floor = sum(item.floor_price for item in bundle)
+    # Sınırlar içinde geçerli bir anlaşma olup olmadığını doğrula (policy kurallarına göre)
+    eff_floor = bundle_floor(bundle)
     within_bounds = (
         agreed_price is not None
-        and (agreed_price + shipping <= scenario.budget + 0.01)
-        and (agreed_price >= total_floor - 0.01)
+        and (agreed_price + buyer_shipping(bundle, agreed_price) <= scenario.budget + 0.01)
+        and (agreed_price >= eff_floor - 0.01)
     )
 
     if not within_bounds:
