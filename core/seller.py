@@ -37,10 +37,12 @@ def pop_seller_llm_error() -> bool:
 
 
 def format_price_tr(price: float) -> str:
-    """Fiyatı temiz bir Türkçe metin biçimine çevirir (örn. 1250.0 -> '1250', 1250.5 -> '1250,50')."""
+    """Fiyatı alıcı tarafıyla aynı Türkçe biçime çevirir (örn. 1250.0 -> '1.250', 1250.5 -> '1.250,50')."""
     if abs(price - round(price)) < 0.005:
-        return str(int(round(price)))
-    return f"{price:.2f}".replace(".", ",")
+        s = f"{int(round(price)):,}"
+    else:
+        s = f"{price:,.2f}"
+    return s.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def seller_reservation_price(

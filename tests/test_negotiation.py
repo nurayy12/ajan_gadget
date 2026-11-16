@@ -363,4 +363,4 @@ def test_llm_retry_and_fallback_records_llm_error(monkeypatch: pytest.MonkeyPatc
     assert call_count == 3  # Tam 3 kez yeniden denemiş olmalı
     assert "llm_error" in result.violations
     assert result.deal is True
-    assert "1000" in result.offers[-1].message
+    assert "1.000" in result.offers[-1].message

@@ -165,3 +165,18 @@ def test_bad_llm_message_falls_back_to_that_tactics_template(monkeypatch):
     offer = buyer_turn(sc, [ITEM], history_until(5, HIGH), 5)
     assert "500" not in offer.message
     assert offer.message in _son_teklif_messages(offer.price)
+
+
+@pytest.mark.parametrize("condition", ["yeni etiketli", "yeni gibi"])
+def test_new_items_never_get_durum(condition):
+    new_item = ITEM.model_copy(update={"condition": condition})
+    for bundle in ([new_item], [ITEM, new_item]):
+        for i in range(30):
+            seq = [choose_buyer_tactic(r, len(bundle) > 1, history_until(r), bundle, f"SC{i}")
+                   for r in range(1, 6)]
+            assert DURUM not in seq
+
+
+def test_used_items_can_get_durum():
+    seqs = [run_tactics(False, f"SC{i}") for i in range(30)]
+    assert any(DURUM in s for s in seqs)

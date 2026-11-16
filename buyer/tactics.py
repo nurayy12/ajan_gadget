@@ -78,7 +78,7 @@ def choose_buyer_tactic(round_no: int, is_bundle: bool, history: list[Offer],
     """Bu turun gerekçesini seçer (belirlenimci; arka arkaya aynı strateji yok).
 
     1. tur "acilis", son tur (config.T) "son_teklif". 2.-4. turlarda uygun olanlar arasından:
-    durum, toplu_alim (yalnızca pakette), hizli_odeme, karsilik (satıcı indirdiyse), yumusatma;
+    durum (pakette yeni ürün yoksa), toplu_alim (yalnızca pakette), hizli_odeme, karsilik (satıcı indirdiyse), yumusatma;
     bir önceki turun stratejisi hariç. Seçim tohumu scenario_id + tur.
     """
     if round_no <= 1:
@@ -86,7 +86,10 @@ def choose_buyer_tactic(round_no: int, is_bundle: bool, history: list[Offer],
     if round_no >= config.T:
         return SON_TEKLIF
 
-    eligible = [DURUM, HIZLI_ODEME, YUMUSATMA]
+    eligible = [HIZLI_ODEME, YUMUSATMA]
+    # "Kullanım izi olabilir" gerekçesi yeni (yeni etiketli / yeni gibi) ürüne uymaz.
+    if not any("yeni" in l.condition.lower() for l in bundle):
+        eligible.insert(0, DURUM)
     if is_bundle:
         eligible.append(TOPLU_ALIM)
     if seller_dropped_price(history, bundle):
