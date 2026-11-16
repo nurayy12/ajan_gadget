@@ -25,7 +25,7 @@ def test_report_without_deal():
 
 def test_report_bundle_tier_shipping_and_saving():
     text = buyer_report(make_result(True, 1400, ["L1", "L2", "L3"]), LISTINGS)
-    assert "Paket indirim kademesi: %10 (3 ürün)" in text
+    assert "Satıcının paket esnekliği: %10 (3 ürün; gerçekleşen indirim yukarıda)" in text
     assert "Kargo: satıcı öder" in text                      # 1400 TL >= 400 TL
     assert "Toplam ödeme (kargo dahil): 1.400 TL" in text
     # ayrı ayrı: 400 (kargo 0) + 900 (kargo 0) + 300 + 29,99 = 1.629,99 -> tasarruf 229,99
@@ -35,14 +35,14 @@ def test_report_bundle_tier_shipping_and_saving():
 
 def test_report_two_items_tier_is_five_percent():
     text = buyer_report(make_result(True, 600, ["L1", "L3"]), LISTINGS)
-    assert "Paket indirim kademesi: %5 (2 ürün)" in text
+    assert "Satıcının paket esnekliği: %5 (2 ürün; gerçekleşen indirim yukarıda)" in text
 
 
 def test_report_buyer_pays_shipping_below_250():
     text = buyer_report(make_result(True, 120, ["L9"], mode="single"), LISTINGS)   # L9: 150 TL, kargo 30
     assert "Kargo: alıcı öder (30 TL)" in text
     assert "Toplam ödeme (kargo dahil): 150 TL" in text
-    assert "Paket indirim" not in text and "ayrı ayrı" not in text   # tek ürün
+    assert "Paket indirim" not in text and "paket esnekliği" not in text and "ayrı ayrı" not in text   # tek ürün
 
 
 def test_report_shipping_is_shared_between_250_and_400():
@@ -61,3 +61,10 @@ def test_report_never_shows_budget_or_floor():
     floor_sum = 123 + 456 + 789
     for secret in ("123", "456", "789", f"{floor_sum:,}".replace(",", "."), "bütçe", "alt sınır"):
         assert secret not in text, secret
+
+
+def test_report_does_not_present_tier_as_discount_received():
+    # Gerçekleşen indirim ayrı satırda; %10 satıcının esnekliği olarak adlandırılır.
+    text = buyer_report(make_result(True, 1400, ["L1", "L2", "L3"]), LISTINGS)
+    assert "indirim kademesi" not in text
+    assert text.index("İndirim: %") < text.index("Satıcının paket esnekliği")

@@ -96,3 +96,26 @@ def test_mock_mode_never_calls_api(monkeypatch):
         raise AssertionError("API çağrıldı!")
     monkeypatch.setattr(llm, "_real_message", boom)
     assert "{FIYAT}" in llm.write_message(["x"], False, 1, [])
+
+
+# --- Gemma yer tutucuyu süslü parantezsiz yazarsa ("FIYAT") şablona dönülür ----------------
+
+@pytest.mark.parametrize("raw", [
+    "Fiyatı: FIYAT. Teklifim: {FIYAT}",
+    "Merhaba, fiyat olur mu? {FIYAT}",
+    "Merhaba, FIYAT olur mu?",
+    "Merhaba, Fiyat TL olur mu? {FIYAT}",
+    "Merhaba, {FIYAT} ve {FIYAT2} olur mu?",
+    "Merhaba, { olur mu? {FIYAT}",
+])
+def test_leftover_placeholder_falls_back_to_template(raw):
+    msg = _finalize_message(raw, 760, False, 1)
+    assert msg == llm.template_message(False, 1).replace(llm.PLACEHOLDER, format_tl(760))
+    assert "FIYAT" not in msg.upper().replace("FIYATI", "")
+    assert "{" not in msg and "}" not in msg
+
+
+def test_natural_turkish_fiyat_words_are_kept():
+    # "fiyatı", "fiyatınız" gibi ekli sözcükler yer tutucu sayılmaz.
+    raw = "Merhaba, fiyatınız biraz yüksek; {FIYAT} olur mu?"
+    assert _finalize_message(raw, 760, False, 1) == "Merhaba, fiyatınız biraz yüksek; 760 TL olur mu?"
