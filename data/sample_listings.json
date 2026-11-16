@@ -8,8 +8,8 @@
     "size": "M",
     "condition": "az kullanılmış",
     "list_price": 1450.0,
-    "floor_price": 1020.44,
-    "shipping_cost": 39.9
+    "floor_price": 1154.0,
+    "shipping_cost": 135.99
   },
   {
     "listing_id": "L002",
@@ -20,8 +20,8 @@
     "size": "38",
     "condition": "az kullanılmış",
     "list_price": 650.0,
-    "floor_price": 481.82,
-    "shipping_cost": 39.9
+    "floor_price": 457.0,
+    "shipping_cost": 135.99
   },
   {
     "listing_id": "L003",
@@ -32,8 +32,8 @@
     "size": "M",
     "condition": "yeni gibi",
     "list_price": 380.0,
-    "floor_price": 278.72,
-    "shipping_cost": 39.9
+    "floor_price": 282.0,
+    "shipping_cost": 39.99
   },
   {
     "listing_id": "L004",
@@ -44,23 +44,35 @@
     "size": "M",
     "condition": "yeni gibi",
     "list_price": 520.0,
-    "floor_price": 421.44,
-    "shipping_cost": 39.9
+    "floor_price": 381.0,
+    "shipping_cost": 39.99
   },
   {
     "listing_id": "L005",
+    "seller_id": "s01",
+    "title": "Bershka siyah basic tişört",
+    "description": "Pamuklu, dar kesim. Birkaç kez giyildi, rengi solmadı.",
+    "category": "kadın giyim",
+    "size": "M",
+    "condition": "az kullanılmış",
+    "list_price": 160.0,
+    "floor_price": 130.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L006",
     "seller_id": "s02",
-    "title": "Mavi Jeans slim fit kot pantolon",
+    "title": "Mavi Jeans slim fit erkek kot",
     "description": "Marcus model, koyu lacivert, 32/32. Rengi solmadı, paçalar orijinal boyda.",
     "category": "erkek giyim",
     "size": "32/32",
     "condition": "az kullanılmış",
     "list_price": 700.0,
-    "floor_price": 552.0,
-    "shipping_cost": 39.9
+    "floor_price": 561.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L006",
+    "listing_id": "L007",
     "seller_id": "s02",
     "title": "LC Waikiki lacivert kapüşonlu sweatshirt",
     "description": "İçi polarlı, kanguru cepli. Tüylenme yok.",
@@ -68,11 +80,11 @@
     "size": "L",
     "condition": "az kullanılmış",
     "list_price": 420.0,
-    "floor_price": 296.0,
-    "shipping_cost": 39.9
+    "floor_price": 350.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L007",
+    "listing_id": "L008",
     "seller_id": "s02",
     "title": "Pull&Bear oversize beyaz tişört",
     "description": "Etiketi üzerinde, hiç giyilmedi. Beden olmadığı için satılık.",
@@ -80,11 +92,11 @@
     "size": "L",
     "condition": "yeni etiketli",
     "list_price": 250.0,
-    "floor_price": 178.51,
-    "shipping_cost": 39.9
+    "floor_price": 178.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L009",
+    "listing_id": "L011",
     "seller_id": "s03",
     "title": "Nike Air Force 1 beyaz spor ayakkabı",
     "description": "Orijinal, kutusu mevcut. Tabanında hafif kullanım izi var.",
@@ -92,11 +104,11 @@
     "size": "38",
     "condition": "az kullanılmış",
     "list_price": 2200.0,
-    "floor_price": 1725.21,
-    "shipping_cost": 39.9
+    "floor_price": 1612.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L013",
+    "listing_id": "L016",
     "seller_id": "s04",
     "title": "Mango siyah omuz çantası",
     "description": "Zincir askılı, kapaklı model. İç astarı temiz, toz torbasıyla gönderilir.",
@@ -104,19 +116,7 @@
     "size": null,
     "condition": "az kullanılmış",
     "list_price": 750.0,
-    "floor_price": 591.29,
-    "shipping_cost": 69.9
-  },
-  {
-    "listing_id": "L017",
-    "seller_id": "s05",
-    "title": "Ray-Ban Wayfarer güneş gözlüğü",
-    "description": "Orijinal, kılıfı ve bezi mevcut. Camlarda çizik yok.",
-    "category": "aksesuar",
-    "size": null,
-    "condition": "az kullanılmış",
-    "list_price": 2800.0,
-    "floor_price": 2102.91,
-    "shipping_cost": 69.9
+    "floor_price": 586.0,
+    "shipping_cost": 135.99
   }
 ]

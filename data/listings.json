@@ -8,8 +8,8 @@
     "size": "M",
     "condition": "az kullanılmış",
     "list_price": 1450.0,
-    "floor_price": 1020.44,
-    "shipping_cost": 39.9
+    "floor_price": 1154.0,
+    "shipping_cost": 135.99
   },
   {
     "listing_id": "L002",
@@ -20,8 +20,8 @@
     "size": "38",
     "condition": "az kullanılmış",
     "list_price": 650.0,
-    "floor_price": 481.82,
-    "shipping_cost": 39.9
+    "floor_price": 457.0,
+    "shipping_cost": 135.99
   },
   {
     "listing_id": "L003",
@@ -32,8 +32,8 @@
     "size": "M",
     "condition": "yeni gibi",
     "list_price": 380.0,
-    "floor_price": 278.72,
-    "shipping_cost": 39.9
+    "floor_price": 282.0,
+    "shipping_cost": 39.99
   },
   {
     "listing_id": "L004",
@@ -44,23 +44,35 @@
     "size": "M",
     "condition": "yeni gibi",
     "list_price": 520.0,
-    "floor_price": 421.44,
-    "shipping_cost": 39.9
+    "floor_price": 381.0,
+    "shipping_cost": 39.99
   },
   {
     "listing_id": "L005",
+    "seller_id": "s01",
+    "title": "Bershka siyah basic tişört",
+    "description": "Pamuklu, dar kesim. Birkaç kez giyildi, rengi solmadı.",
+    "category": "kadın giyim",
+    "size": "M",
+    "condition": "az kullanılmış",
+    "list_price": 160.0,
+    "floor_price": 130.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L006",
     "seller_id": "s02",
-    "title": "Mavi Jeans slim fit kot pantolon",
+    "title": "Mavi Jeans slim fit erkek kot",
     "description": "Marcus model, koyu lacivert, 32/32. Rengi solmadı, paçalar orijinal boyda.",
     "category": "erkek giyim",
     "size": "32/32",
     "condition": "az kullanılmış",
     "list_price": 700.0,
-    "floor_price": 552.0,
-    "shipping_cost": 39.9
+    "floor_price": 561.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L006",
+    "listing_id": "L007",
     "seller_id": "s02",
     "title": "LC Waikiki lacivert kapüşonlu sweatshirt",
     "description": "İçi polarlı, kanguru cepli. Tüylenme yok.",
@@ -68,11 +80,11 @@
     "size": "L",
     "condition": "az kullanılmış",
     "list_price": 420.0,
-    "floor_price": 296.0,
-    "shipping_cost": 39.9
+    "floor_price": 350.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L007",
+    "listing_id": "L008",
     "seller_id": "s02",
     "title": "Pull&Bear oversize beyaz tişört",
     "description": "Etiketi üzerinde, hiç giyilmedi. Beden olmadığı için satılık.",
@@ -80,11 +92,11 @@
     "size": "L",
     "condition": "yeni etiketli",
     "list_price": 250.0,
-    "floor_price": 178.51,
-    "shipping_cost": 39.9
+    "floor_price": 178.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L008",
+    "listing_id": "L009",
     "seller_id": "s02",
     "title": "Columbia su geçirmez mont",
     "description": "Omni-Heat astarlı, siyah. İki kış giyildi, fermuar ve çıtçıtlar sağlam.",
@@ -92,11 +104,23 @@
     "size": "L",
     "condition": "iyi",
     "list_price": 2400.0,
-    "floor_price": 1763.76,
-    "shipping_cost": 39.9
+    "floor_price": 1832.0,
+    "shipping_cost": 199.99
   },
   {
-    "listing_id": "L009",
+    "listing_id": "L010",
+    "seller_id": "s02",
+    "title": "DeFacto gri jogger eşofman altı",
+    "description": "Paçası lastikli, yanları cepli. Evde birkaç kez giyildi.",
+    "category": "erkek giyim",
+    "size": "L",
+    "condition": "az kullanılmış",
+    "list_price": 280.0,
+    "floor_price": 197.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L011",
     "seller_id": "s03",
     "title": "Nike Air Force 1 beyaz spor ayakkabı",
     "description": "Orijinal, kutusu mevcut. Tabanında hafif kullanım izi var.",
@@ -104,11 +128,11 @@
     "size": "38",
     "condition": "az kullanılmış",
     "list_price": 2200.0,
-    "floor_price": 1725.21,
-    "shipping_cost": 39.9
+    "floor_price": 1612.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L010",
+    "listing_id": "L012",
     "seller_id": "s03",
     "title": "Adidas Stan Smith yeşil detaylı sneaker",
     "description": "Orijinal, faturası duruyor. Burun kısmında çok hafif kırışıklık.",
@@ -116,11 +140,11 @@
     "size": "38",
     "condition": "iyi",
     "list_price": 1800.0,
-    "floor_price": 1453.33,
-    "shipping_cost": 39.9
+    "floor_price": 1396.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L011",
+    "listing_id": "L013",
     "seller_id": "s03",
     "title": "Skechers hafızalı taban yürüyüş ayakkabısı",
     "description": "Gri-pembe, çok rahat. Numarası büyük geldi, 2 kez giyildi.",
@@ -128,11 +152,11 @@
     "size": "38",
     "condition": "yeni gibi",
     "list_price": 1300.0,
-    "floor_price": 1046.76,
-    "shipping_cost": 39.9
+    "floor_price": 915.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L012",
+    "listing_id": "L014",
     "seller_id": "s03",
     "title": "Dr. Martens 1460 siyah bot",
     "description": "8 delikli klasik model. Deri bakımı yapıldı, tabanı yeni gibi.",
@@ -140,11 +164,23 @@
     "size": "38",
     "condition": "iyi",
     "list_price": 3500.0,
-    "floor_price": 2670.25,
-    "shipping_cost": 39.9
+    "floor_price": 2554.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L013",
+    "listing_id": "L015",
+    "seller_id": "s03",
+    "title": "Converse Chuck Taylor kırmızı keten ayakkabı",
+    "description": "Bilekli model, bağcıkları yeni. Az kullanıldı.",
+    "category": "ayakkabı",
+    "size": "38",
+    "condition": "az kullanılmış",
+    "list_price": 900.0,
+    "floor_price": 718.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L016",
     "seller_id": "s04",
     "title": "Mango siyah omuz çantası",
     "description": "Zincir askılı, kapaklı model. İç astarı temiz, toz torbasıyla gönderilir.",
@@ -152,11 +188,11 @@
     "size": null,
     "condition": "az kullanılmış",
     "list_price": 750.0,
-    "floor_price": 591.29,
-    "shipping_cost": 69.9
+    "floor_price": 586.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L014",
+    "listing_id": "L017",
     "seller_id": "s04",
     "title": "Fjällräven Kanken bordo sırt çantası",
     "description": "Orijinal, 16 litre. Okulda bir dönem kullanıldı, fermuarlar sağlam.",
@@ -164,11 +200,11 @@
     "size": null,
     "condition": "iyi",
     "list_price": 1600.0,
-    "floor_price": 1314.26,
-    "shipping_cost": 69.9
+    "floor_price": 1173.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L015",
+    "listing_id": "L018",
     "seller_id": "s04",
     "title": "Derimod hakiki deri kadın cüzdan",
     "description": "Taba rengi, çok bölmeli. Hediye geldi, kutusunda.",
@@ -176,11 +212,11 @@
     "size": null,
     "condition": "yeni etiketli",
     "list_price": 550.0,
-    "floor_price": 385.54,
-    "shipping_cost": 69.9
+    "floor_price": 434.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L016",
+    "listing_id": "L019",
     "seller_id": "s04",
     "title": "Zara hasır el çantası",
     "description": "Yazlık, bambu saplı. Tek sezon kullanıldı.",
@@ -188,11 +224,23 @@
     "size": null,
     "condition": "az kullanılmış",
     "list_price": 480.0,
-    "floor_price": 394.02,
-    "shipping_cost": 69.9
+    "floor_price": 394.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L017",
+    "listing_id": "L020",
+    "seller_id": "s04",
+    "title": "Koton bez tote çanta",
+    "description": "Krem rengi, baskılı. Fermuarlı iç cebi var.",
+    "category": "çanta",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 190.0,
+    "floor_price": 133.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L021",
     "seller_id": "s05",
     "title": "Ray-Ban Wayfarer güneş gözlüğü",
     "description": "Orijinal, kılıfı ve bezi mevcut. Camlarda çizik yok.",
@@ -200,23 +248,23 @@
     "size": null,
     "condition": "az kullanılmış",
     "list_price": 2800.0,
-    "floor_price": 2102.91,
-    "shipping_cost": 69.9
+    "floor_price": 2298.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L018",
+    "listing_id": "L022",
     "seller_id": "s05",
-    "title": "Vakko ipek fular",
-    "description": "90x90, lacivert desenli. Kutusunda, hiç kullanılmadı.",
+    "title": "Vakko lacivert ipek fular",
+    "description": "90x90, desenli. Kutusunda, hiç kullanılmadı.",
     "category": "aksesuar",
     "size": null,
     "condition": "yeni etiketli",
     "list_price": 1200.0,
-    "floor_price": 867.99,
-    "shipping_cost": 69.9
+    "floor_price": 966.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L019",
+    "listing_id": "L023",
     "seller_id": "s05",
     "title": "Hakiki deri kahverengi kemer",
     "description": "4 cm genişlik, 105 cm. Tokasında çizik yok.",
@@ -224,11 +272,11 @@
     "size": null,
     "condition": "iyi",
     "list_price": 300.0,
-    "floor_price": 253.07,
-    "shipping_cost": 69.9
+    "floor_price": 225.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L020",
+    "listing_id": "L024",
     "seller_id": "s05",
     "title": "Casio vintage altın rengi kol saati",
     "description": "A168 model, pili yeni değişti. Kordon tam boy.",
@@ -236,11 +284,23 @@
     "size": null,
     "condition": "az kullanılmış",
     "list_price": 1100.0,
-    "floor_price": 825.54,
-    "shipping_cost": 69.9
+    "floor_price": 796.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L021",
+    "listing_id": "L025",
+    "seller_id": "s05",
+    "title": "Gümüş halka küpe",
+    "description": "925 ayar, küçük boy. Kutusunda gönderilir.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 220.0,
+    "floor_price": 186.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L026",
     "seller_id": "s06",
     "title": "İpekyol bej triko kazak",
     "description": "Yün karışımlı, boğazlı. Kuru temizlemeden çıktı.",
@@ -248,11 +308,11 @@
     "size": "S",
     "condition": "az kullanılmış",
     "list_price": 600.0,
-    "floor_price": 454.19,
-    "shipping_cost": 39.9
+    "floor_price": 450.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L022",
+    "listing_id": "L027",
     "seller_id": "s06",
     "title": "Network camel kaşe kaban",
     "description": "Diz üstü, kuşaklı. İki sezon giyildi, astarı sağlam.",
@@ -260,11 +320,11 @@
     "size": "S",
     "condition": "iyi",
     "list_price": 3200.0,
-    "floor_price": 2412.31,
-    "shipping_cost": 39.9
+    "floor_price": 2285.0,
+    "shipping_cost": 199.99
   },
   {
-    "listing_id": "L023",
+    "listing_id": "L028",
     "seller_id": "s06",
     "title": "Stradivarius siyah pileli etek",
     "description": "Midi boy, beli lastikli. Birkaç kez giyildi.",
@@ -272,11 +332,11 @@
     "size": "S",
     "condition": "az kullanılmış",
     "list_price": 350.0,
-    "floor_price": 263.06,
-    "shipping_cost": 39.9
+    "floor_price": 250.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L024",
+    "listing_id": "L029",
     "seller_id": "s06",
     "title": "Massimo Dutti lacivert blazer ceket",
     "description": "Tek düğmeli, astarlı. Ofis için alındı, çok az giyildi.",
@@ -284,11 +344,23 @@
     "size": "S",
     "condition": "yeni gibi",
     "list_price": 1900.0,
-    "floor_price": 1405.39,
-    "shipping_cost": 39.9
+    "floor_price": 1572.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L025",
+    "listing_id": "L030",
+    "seller_id": "s06",
+    "title": "Mango krem saten bluz",
+    "description": "Dökümlü, gizli düğmeli. Bir kez giyildi.",
+    "category": "kadın giyim",
+    "size": "S",
+    "condition": "yeni gibi",
+    "list_price": 450.0,
+    "floor_price": 356.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L031",
     "seller_id": "s07",
     "title": "Altınyıldız beyaz klasik gömlek",
     "description": "Slim fit, pamuklu. Ütülü ve temiz gönderilir.",
@@ -296,11 +368,11 @@
     "size": "M",
     "condition": "az kullanılmış",
     "list_price": 450.0,
-    "floor_price": 364.26,
-    "shipping_cost": 39.9
+    "floor_price": 369.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L026",
+    "listing_id": "L032",
     "seller_id": "s07",
     "title": "Dockers bej chino pantolon",
     "description": "31/32, düz kesim. Rengi canlı, diz izi yok.",
@@ -308,23 +380,23 @@
     "size": "31/32",
     "condition": "az kullanılmış",
     "list_price": 800.0,
-    "floor_price": 624.35,
-    "shipping_cost": 39.9
+    "floor_price": 648.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L027",
+    "listing_id": "L033",
     "seller_id": "s07",
-    "title": "Hotiç kahverengi deri klasik ayakkabı",
-    "description": "Bağcıklı oxford model. Düğünde bir kez giyildi.",
+    "title": "Hotiç kahverengi deri oxford ayakkabı",
+    "description": "Bağcıklı klasik model. Düğünde bir kez giyildi.",
     "category": "ayakkabı",
     "size": "42",
     "condition": "yeni gibi",
     "list_price": 1700.0,
-    "floor_price": 1438.14,
-    "shipping_cost": 39.9
+    "floor_price": 1327.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L028",
+    "listing_id": "L034",
     "seller_id": "s07",
     "title": "Pierre Cardin bordo ipek kravat",
     "description": "Kutusunda, desenli. Hiç takılmadı.",
@@ -332,11 +404,23 @@
     "size": null,
     "condition": "yeni etiketli",
     "list_price": 280.0,
-    "floor_price": 211.9,
-    "shipping_cost": 39.9
+    "floor_price": 237.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L029",
+    "listing_id": "L035",
+    "seller_id": "s07",
+    "title": "Kiğılı lacivert takım elbise",
+    "description": "Ceket ve pantolon, 50 beden. Bir düğünde giyildi.",
+    "category": "erkek giyim",
+    "size": "50",
+    "condition": "yeni gibi",
+    "list_price": 3900.0,
+    "floor_price": 2951.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L036",
     "seller_id": "s08",
     "title": "Oleg Cassini zümrüt yeşili abiye elbise",
     "description": "Uzun, saten, yırtmaçlı. Tek gece giyildi, kuru temizleme yapıldı.",
@@ -344,11 +428,11 @@
     "size": "36",
     "condition": "yeni gibi",
     "list_price": 4500.0,
-    "floor_price": 3709.85,
-    "shipping_cost": 59.9
+    "floor_price": 3523.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L030",
+    "listing_id": "L037",
     "seller_id": "s08",
     "title": "Nine West gümüş topuklu ayakkabı",
     "description": "8 cm ince topuk. Abiyeyle birlikte bir kez giyildi.",
@@ -356,11 +440,11 @@
     "size": "37",
     "condition": "yeni gibi",
     "list_price": 1400.0,
-    "floor_price": 1109.89,
-    "shipping_cost": 59.9
+    "floor_price": 1154.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L031",
+    "listing_id": "L038",
     "seller_id": "s08",
     "title": "Gümüş taşlı clutch çanta",
     "description": "Zincir askısı içinde. Davet için alındı, tek kullanım.",
@@ -368,11 +452,11 @@
     "size": null,
     "condition": "yeni gibi",
     "list_price": 650.0,
-    "floor_price": 539.02,
-    "shipping_cost": 59.9
+    "floor_price": 515.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L032",
+    "listing_id": "L039",
     "seller_id": "s08",
     "title": "Siyah saten omuz şalı",
     "description": "Geniş, abiye üstüne uygun. Lekesiz.",
@@ -380,11 +464,23 @@
     "size": null,
     "condition": "az kullanılmış",
     "list_price": 320.0,
-    "floor_price": 251.71,
-    "shipping_cost": 59.9
+    "floor_price": 265.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L033",
+    "listing_id": "L040",
+    "seller_id": "s08",
+    "title": "İnci detaylı saç tokası",
+    "description": "Düğün için alındı, bir kez takıldı.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 150.0,
+    "floor_price": 118.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L041",
     "seller_id": "s09",
     "title": "Nike Pro siyah spor tayt",
     "description": "Yüksek bel, toparlayıcı. Dikişlerinde açılma yok.",
@@ -392,11 +488,11 @@
     "size": "S",
     "condition": "az kullanılmış",
     "list_price": 700.0,
-    "floor_price": 494.81,
-    "shipping_cost": 39.9
+    "floor_price": 564.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L034",
+    "listing_id": "L042",
     "seller_id": "s09",
     "title": "Adidas pembe spor atlet",
     "description": "Hızlı kuruyan kumaş. İki kez giyildi.",
@@ -404,11 +500,11 @@
     "size": "S",
     "condition": "yeni gibi",
     "list_price": 400.0,
-    "floor_price": 293.67,
-    "shipping_cost": 39.9
+    "floor_price": 283.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L035",
+    "listing_id": "L043",
     "seller_id": "s09",
     "title": "Asics Gel-Contend koşu ayakkabısı",
     "description": "Mor-beyaz, yaklaşık 50 km koşuldu. Taban dişleri duruyor.",
@@ -416,11 +512,11 @@
     "size": "37",
     "condition": "iyi",
     "list_price": 1900.0,
-    "floor_price": 1412.48,
-    "shipping_cost": 39.9
+    "floor_price": 1395.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L036",
+    "listing_id": "L044",
     "seller_id": "s09",
     "title": "Puma fermuarlı eşofman üstü",
     "description": "Gri, cepli. Bol kalıp.",
@@ -428,11 +524,23 @@
     "size": "S",
     "condition": "az kullanılmış",
     "list_price": 650.0,
-    "floor_price": 462.78,
-    "shipping_cost": 39.9
+    "floor_price": 483.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L037",
+    "listing_id": "L045",
+    "seller_id": "s09",
+    "title": "Decathlon mor yoga matı çantası",
+    "description": "Askılı, mat dahil değil. Bir kez kullanıldı.",
+    "category": "çanta",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 240.0,
+    "floor_price": 171.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L046",
     "seller_id": "s10",
     "title": "Derimod hakiki deri erkek ceket",
     "description": "Siyah, biker model. Derisi yumuşak, çatlama yok.",
@@ -440,11 +548,11 @@
     "size": "L",
     "condition": "iyi",
     "list_price": 5200.0,
-    "floor_price": 4315.86,
-    "shipping_cost": 49.9
+    "floor_price": 3822.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L038",
+    "listing_id": "L047",
     "seller_id": "s10",
     "title": "Timberland sarı erkek bot",
     "description": "Klasik 6 inç model. Su geçirmez, tabanı sağlam.",
@@ -452,11 +560,11 @@
     "size": "43",
     "condition": "iyi",
     "list_price": 3800.0,
-    "floor_price": 2876.67,
-    "shipping_cost": 49.9
+    "floor_price": 2718.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L039",
+    "listing_id": "L048",
     "seller_id": "s10",
     "title": "Mavi yün atkı ve bere takımı",
     "description": "Antrasit, hediye paketinde. Hiç kullanılmadı.",
@@ -464,11 +572,35 @@
     "size": null,
     "condition": "yeni etiketli",
     "list_price": 450.0,
-    "floor_price": 345.61,
-    "shipping_cost": 49.9
+    "floor_price": 334.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L040",
+    "listing_id": "L049",
+    "seller_id": "s10",
+    "title": "The North Face siyah polar",
+    "description": "Yarım fermuarlı, kalın. Bir kış giyildi.",
+    "category": "erkek giyim",
+    "size": "L",
+    "condition": "az kullanılmış",
+    "list_price": 1600.0,
+    "floor_price": 1273.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L050",
+    "seller_id": "s10",
+    "title": "Deri erkek eldiven",
+    "description": "Siyah, içi astarlı. Bir kez takıldı.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 350.0,
+    "floor_price": 264.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L051",
     "seller_id": "s11",
     "title": "Zara bej trençkot",
     "description": "Kruvaze, kemerli. Bahar için ideal, iki sezon giyildi.",
@@ -476,11 +608,11 @@
     "size": "M",
     "condition": "iyi",
     "list_price": 1800.0,
-    "floor_price": 1303.92,
-    "shipping_cost": 59.9
+    "floor_price": 1360.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L041",
+    "listing_id": "L052",
     "seller_id": "s11",
     "title": "Bambi siyah rugan babet",
     "description": "Fiyonklu, çok rahat. Topuk lastiği yeni.",
@@ -488,107 +620,215 @@
     "size": "38",
     "condition": "az kullanılmış",
     "list_price": 500.0,
-    "floor_price": 376.65,
-    "shipping_cost": 59.9
+    "floor_price": 366.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L042",
+    "listing_id": "L053",
     "seller_id": "s11",
-    "title": "Koton bez tote çanta",
-    "description": "Krem rengi, baskılı. Fermuarlı iç cep var.",
+    "title": "Koton kanvas alışveriş çantası",
+    "description": "Krem rengi, baskılı. Fermuarlı iç cebi var.",
     "category": "çanta",
     "size": null,
     "condition": "yeni gibi",
     "list_price": 220.0,
-    "floor_price": 176.12,
-    "shipping_cost": 59.9
+    "floor_price": 163.0,
+    "shipping_cost": 39.99
   },
   {
-    "listing_id": "L043",
-    "seller_id": "s12",
-    "title": "Mango saten yeşil gömlek",
-    "description": "Dökümlü, gizli düğmeli. Bir kez giyildi.",
+    "listing_id": "L054",
+    "seller_id": "s11",
+    "title": "Mango çizgili triko hırka",
+    "description": "Düğmeli, lacivert-beyaz. Birkaç kez giyildi.",
     "category": "kadın giyim",
-    "size": "L",
-    "condition": "yeni gibi",
+    "size": "M",
+    "condition": "az kullanılmış",
     "list_price": 550.0,
-    "floor_price": 435.25,
-    "shipping_cost": 39.9
+    "floor_price": 462.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L044",
+    "listing_id": "L055",
     "seller_id": "s12",
-    "title": "Koton kot mini etek",
-    "description": "Önden düğmeli, açık mavi. Defosuz.",
-    "category": "kadın giyim",
+    "title": "Nike Tech Fleece gri eşofman takımı",
+    "description": "Üst ve alt, L beden. Orijinal, tüylenme yok.",
+    "category": "erkek giyim",
     "size": "L",
-    "condition": "az kullanılmış",
-    "list_price": 300.0,
-    "floor_price": 217.7,
-    "shipping_cost": 39.9
-  },
-  {
-    "listing_id": "L045",
-    "seller_id": "s13",
-    "title": "Lacoste lacivert polo yaka tişört",
-    "description": "Orijinal, timsah logolu. Yakası formunu koruyor.",
-    "category": "erkek giyim",
-    "size": "XL",
-    "condition": "az kullanılmış",
-    "list_price": 1500.0,
-    "floor_price": 1086.77,
-    "shipping_cost": 49.9
-  },
-  {
-    "listing_id": "L046",
-    "seller_id": "s13",
-    "title": "DeFacto haki kargo şort",
-    "description": "Bol cepli, diz üstü. Tatilde bir hafta giyildi.",
-    "category": "erkek giyim",
-    "size": "XL",
-    "condition": "az kullanılmış",
-    "list_price": 350.0,
-    "floor_price": 264.92,
-    "shipping_cost": 49.9
-  },
-  {
-    "listing_id": "L047",
-    "seller_id": "s14",
-    "title": "New Balance 574 gri sneaker",
-    "description": "Orijinal, kutulu. Süet kısımları temiz.",
-    "category": "ayakkabı",
-    "size": "41",
     "condition": "az kullanılmış",
     "list_price": 2600.0,
-    "floor_price": 2087.0,
-    "shipping_cost": 49.9
+    "floor_price": 2073.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L048",
-    "seller_id": "s14",
-    "title": "Birkenstock Arizona kahverengi sandalet",
-    "description": "Mantar taban, iki bantlı. Bir yaz giyildi.",
+    "listing_id": "L056",
+    "seller_id": "s12",
+    "title": "Adidas Ultraboost siyah koşu ayakkabısı",
+    "description": "43 numara, 100 km kadar koşuldu.",
     "category": "ayakkabı",
-    "size": "41",
+    "size": "43",
     "condition": "iyi",
-    "list_price": 1500.0,
-    "floor_price": 1239.64,
-    "shipping_cost": 49.9
+    "list_price": 2900.0,
+    "floor_price": 2295.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L049",
-    "seller_id": "s15",
-    "title": "Samsonite 15.6 inç laptop çantası",
-    "description": "Omuz askılı, siyah. Fermuar ve askı sağlam.",
+    "listing_id": "L057",
+    "seller_id": "s12",
+    "title": "Under Armour siyah spor şort",
+    "description": "Hızlı kuruyan, iç taytlı. İki kez giyildi.",
+    "category": "erkek giyim",
+    "size": "L",
+    "condition": "yeni gibi",
+    "list_price": 450.0,
+    "floor_price": 327.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L058",
+    "seller_id": "s12",
+    "title": "Puma spor çorap 6'lı paket",
+    "description": "Kutusu açılmadı, 43-46 numara.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni etiketli",
+    "list_price": 180.0,
+    "floor_price": 146.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L059",
+    "seller_id": "s13",
+    "title": "Vakko yün karışımlı uzun hırka",
+    "description": "Bej, cepli, diz boyu. Bir kış giyildi.",
+    "category": "kadın giyim",
+    "size": "M",
+    "condition": "iyi",
+    "list_price": 2100.0,
+    "floor_price": 1521.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L060",
+    "seller_id": "s13",
+    "title": "İpekyol boğazlı kaşmir kazak",
+    "description": "Gri, yumuşacık. Tüylenme yok.",
+    "category": "kadın giyim",
+    "size": "M",
+    "condition": "az kullanılmış",
+    "list_price": 1300.0,
+    "floor_price": 984.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L061",
+    "seller_id": "s13",
+    "title": "Örgü bere",
+    "description": "Ekru, ponponlu. Hiç takılmadı.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni etiketli",
+    "list_price": 170.0,
+    "floor_price": 144.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L062",
+    "seller_id": "s13",
+    "title": "Yün karışımlı ekose atkı",
+    "description": "Kırmızı-yeşil desenli, püsküllü.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "az kullanılmış",
+    "list_price": 260.0,
+    "floor_price": 207.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L063",
+    "seller_id": "s14",
+    "title": "Vintage deri evrak çantası",
+    "description": "Kahverengi, 90'lardan kalma. Kilidi çalışıyor.",
     "category": "çanta",
     "size": null,
     "condition": "iyi",
-    "list_price": 1300.0,
-    "floor_price": 954.66,
-    "shipping_cost": 39.9
+    "list_price": 1500.0,
+    "floor_price": 1175.0,
+    "shipping_cost": 135.99
   },
   {
-    "listing_id": "L050",
+    "listing_id": "L064",
+    "seller_id": "s14",
+    "title": "Vintage Seiko otomatik kol saati",
+    "description": "Çalışır durumda, bakımı yeni yapıldı.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "iyi",
+    "list_price": 3600.0,
+    "floor_price": 2890.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L065",
+    "seller_id": "s14",
+    "title": "Vintage yuvarlak çerçeve gözlük",
+    "description": "Numarasız cam takılı, metal çerçeve.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "iyi",
+    "list_price": 450.0,
+    "floor_price": 372.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L066",
+    "seller_id": "s14",
+    "title": "Vintage ipek erkek mendili",
+    "description": "Desenli, ceket cebi için. Ütülü.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "az kullanılmış",
+    "list_price": 140.0,
+    "floor_price": 114.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L067",
+    "seller_id": "s15",
+    "title": "Carhartt kahverengi iş ceketi",
+    "description": "Kanvas, astarlı. Eskitme görünümü doğal.",
+    "category": "erkek giyim",
+    "size": "L",
+    "condition": "iyi",
+    "list_price": 2700.0,
+    "floor_price": 1983.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L068",
+    "seller_id": "s15",
+    "title": "Dickies siyah geniş paça pantolon",
+    "description": "874 model, 32 bel. Az giyildi.",
+    "category": "erkek giyim",
+    "size": "32",
+    "condition": "az kullanılmış",
+    "list_price": 900.0,
+    "floor_price": 634.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L069",
+    "seller_id": "s15",
+    "title": "Oversize baskılı grafik tişört",
+    "description": "Siyah, sırtında baskı. Bir kez yıkandı.",
+    "category": "erkek giyim",
+    "size": "XL",
+    "condition": "yeni gibi",
+    "list_price": 300.0,
+    "floor_price": 224.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L070",
     "seller_id": "s15",
     "title": "New Era siyah beyzbol şapkası",
     "description": "Ayarlanabilir, işlemeli logo. Birkaç kez takıldı.",
@@ -596,7 +836,367 @@
     "size": null,
     "condition": "az kullanılmış",
     "list_price": 600.0,
-    "floor_price": 422.89,
-    "shipping_cost": 39.9
+    "floor_price": 444.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L071",
+    "seller_id": "s16",
+    "title": "Mango beyaz keten şort",
+    "description": "Yüksek bel, kuşaklı. Bir yaz giyildi.",
+    "category": "kadın giyim",
+    "size": "M",
+    "condition": "az kullanılmış",
+    "list_price": 400.0,
+    "floor_price": 293.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L072",
+    "seller_id": "s16",
+    "title": "Zara çiçekli askılı elbise",
+    "description": "Kısa boy, viskon. Tatilde iki kez giyildi.",
+    "category": "kadın giyim",
+    "size": "M",
+    "condition": "az kullanılmış",
+    "list_price": 550.0,
+    "floor_price": 463.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L073",
+    "seller_id": "s16",
+    "title": "Hasır geniş kenarlı şapka",
+    "description": "Plaj için, siyah kurdeleli.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 230.0,
+    "floor_price": 191.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L074",
+    "seller_id": "s16",
+    "title": "Hakiki deri bodrum sandalet",
+    "description": "El yapımı, taba rengi. Bir yaz giyildi.",
+    "category": "ayakkabı",
+    "size": "38",
+    "condition": "iyi",
+    "list_price": 650.0,
+    "floor_price": 486.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L075",
+    "seller_id": "s17",
+    "title": "Camper kahverengi erkek loafer",
+    "description": "Süet, 42 numara. Birkaç kez giyildi.",
+    "category": "ayakkabı",
+    "size": "42",
+    "condition": "az kullanılmış",
+    "list_price": 2300.0,
+    "floor_price": 1836.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L076",
+    "seller_id": "s17",
+    "title": "Birkenstock Arizona erkek terlik",
+    "description": "Mantar taban, siyah. Bir yaz kullanıldı.",
+    "category": "ayakkabı",
+    "size": "42",
+    "condition": "iyi",
+    "list_price": 1500.0,
+    "floor_price": 1139.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L077",
+    "seller_id": "s17",
+    "title": "Converse siyah bilekli erkek sneaker",
+    "description": "Chuck 70, 42 numara. Az kullanıldı.",
+    "category": "ayakkabı",
+    "size": "42",
+    "condition": "az kullanılmış",
+    "list_price": 1400.0,
+    "floor_price": 1172.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L078",
+    "seller_id": "s18",
+    "title": "Mango siyah şişme mont",
+    "description": "Uzun boy, kapüşonlu, kaz tüyü dolgulu. Bir kış giyildi.",
+    "category": "kadın giyim",
+    "size": "M",
+    "condition": "iyi",
+    "list_price": 2800.0,
+    "floor_price": 2153.0,
+    "shipping_cost": 199.99
+  },
+  {
+    "listing_id": "L079",
+    "seller_id": "s18",
+    "title": "UGG bej kar botu",
+    "description": "Orijinal, 38 numara. İçi kürk, temiz.",
+    "category": "ayakkabı",
+    "size": "38",
+    "condition": "iyi",
+    "list_price": 2400.0,
+    "floor_price": 1775.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L080",
+    "seller_id": "s18",
+    "title": "Polar boyunluk ve eldiven seti",
+    "description": "Gri, hiç kullanılmadı.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni etiketli",
+    "list_price": 210.0,
+    "floor_price": 155.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L081",
+    "seller_id": "s19",
+    "title": "Samsonite orta boy kabin valizi",
+    "description": "Dört tekerlekli, sert kasa. Birkaç seyahat yaptı.",
+    "category": "çanta",
+    "size": null,
+    "condition": "iyi",
+    "list_price": 3200.0,
+    "floor_price": 2509.0,
+    "shipping_cost": 199.99
+  },
+  {
+    "listing_id": "L082",
+    "seller_id": "s19",
+    "title": "Deuter 40 litre kamp sırt çantası",
+    "description": "Bel kemerli, yağmurluklu. Bir kampta kullanıldı.",
+    "category": "çanta",
+    "size": null,
+    "condition": "iyi",
+    "list_price": 2100.0,
+    "floor_price": 1553.0,
+    "shipping_cost": 199.99
+  },
+  {
+    "listing_id": "L083",
+    "seller_id": "s19",
+    "title": "Seyahat düzenleyici çanta seti",
+    "description": "4 parça, fermuarlı. Hiç kullanılmadı.",
+    "category": "çanta",
+    "size": null,
+    "condition": "yeni etiketli",
+    "list_price": 350.0,
+    "floor_price": 276.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L084",
+    "seller_id": "s20",
+    "title": "Gümüş isim kolye",
+    "description": "925 ayar, zinciri 45 cm. Kutusunda.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 480.0,
+    "floor_price": 401.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L085",
+    "seller_id": "s20",
+    "title": "Altın kaplama zincir bileklik",
+    "description": "İnce model, kararma yok.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "az kullanılmış",
+    "list_price": 320.0,
+    "floor_price": 243.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L086",
+    "seller_id": "s20",
+    "title": "Doğal taş yüzük",
+    "description": "Ayarlanabilir, ametist taşlı.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 260.0,
+    "floor_price": 191.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L087",
+    "seller_id": "s21",
+    "title": "Levi's 501 açık mavi kot pantolon",
+    "description": "Erkek, 32/32. Klasik kesim, defosuz.",
+    "category": "erkek giyim",
+    "size": "32/32",
+    "condition": "iyi",
+    "list_price": 1100.0,
+    "floor_price": 935.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L088",
+    "seller_id": "s21",
+    "title": "Levi's kot ceket",
+    "description": "Trucker model, M beden. Az giyildi.",
+    "category": "erkek giyim",
+    "size": "M",
+    "condition": "az kullanılmış",
+    "list_price": 1400.0,
+    "floor_price": 1087.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L089",
+    "seller_id": "s21",
+    "title": "Örgü kahverengi deri kemer",
+    "description": "Erkek, 100 cm. Tokası pirinç.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "iyi",
+    "list_price": 280.0,
+    "floor_price": 200.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L090",
+    "seller_id": "s22",
+    "title": "Pierre Cardin kadın el çantası",
+    "description": "Siyah, sert formlu. Bir sezon kullanıldı.",
+    "category": "çanta",
+    "size": null,
+    "condition": "iyi",
+    "list_price": 900.0,
+    "floor_price": 636.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L091",
+    "seller_id": "s22",
+    "title": "Deri kartlık",
+    "description": "Bordo, 6 kart bölmeli. Hediye kutusunda.",
+    "category": "çanta",
+    "size": null,
+    "condition": "yeni etiketli",
+    "list_price": 200.0,
+    "floor_price": 143.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L092",
+    "seller_id": "s22",
+    "title": "Zincir askılı mini çanta",
+    "description": "Krem rengi, kapitone. İki kez kullanıldı.",
+    "category": "çanta",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 520.0,
+    "floor_price": 413.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L093",
+    "seller_id": "s23",
+    "title": "Penti siyah külotlu çorap 3'lü",
+    "description": "40 denye, paketi açılmadı.",
+    "category": "kadın giyim",
+    "size": "M",
+    "condition": "yeni etiketli",
+    "list_price": 120.0,
+    "floor_price": 98.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L094",
+    "seller_id": "s23",
+    "title": "Koton ribanalı body",
+    "description": "Siyah, uzun kollu. Bir kez giyildi.",
+    "category": "kadın giyim",
+    "size": "S",
+    "condition": "yeni gibi",
+    "list_price": 210.0,
+    "floor_price": 160.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L095",
+    "seller_id": "s23",
+    "title": "LC Waikiki örme ev pijaması",
+    "description": "Pembe, takım. Hiç giyilmedi.",
+    "category": "kadın giyim",
+    "size": "M",
+    "condition": "yeni etiketli",
+    "list_price": 260.0,
+    "floor_price": 184.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L096",
+    "seller_id": "s24",
+    "title": "Tommy Hilfiger lacivert polo tişört",
+    "description": "Erkek, M beden. Yakası formunu koruyor.",
+    "category": "erkek giyim",
+    "size": "M",
+    "condition": "az kullanılmış",
+    "list_price": 900.0,
+    "floor_price": 682.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L097",
+    "seller_id": "s24",
+    "title": "Gant beyaz oxford gömlek",
+    "description": "Regular fit, M beden. Ütülü gönderilir.",
+    "category": "erkek giyim",
+    "size": "M",
+    "condition": "az kullanılmış",
+    "list_price": 1000.0,
+    "floor_price": 849.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L098",
+    "seller_id": "s24",
+    "title": "U.S. Polo Assn. lacivert kazak",
+    "description": "V yaka, pamuklu. Bir kış giyildi.",
+    "category": "erkek giyim",
+    "size": "M",
+    "condition": "iyi",
+    "list_price": 650.0,
+    "floor_price": 507.0,
+    "shipping_cost": 135.99
+  },
+  {
+    "listing_id": "L099",
+    "seller_id": "s25",
+    "title": "Pandora gümüş charm bileklik",
+    "description": "Orijinal, 3 charm ile. Kutusu ve faturası var.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "az kullanılmış",
+    "list_price": 2500.0,
+    "floor_price": 2114.0,
+    "shipping_cost": 39.99
+  },
+  {
+    "listing_id": "L100",
+    "seller_id": "s25",
+    "title": "Swarovski kristal küpe",
+    "description": "Orijinal, kutusunda. Bir kez takıldı.",
+    "category": "aksesuar",
+    "size": null,
+    "condition": "yeni gibi",
+    "list_price": 1300.0,
+    "floor_price": 1078.0,
+    "shipping_cost": 39.99
   }
 ]

@@ -1,16 +1,18 @@
-"""Her senaryoyu 2 sistem x 2 mod = 4 koşulda çalıştırır, sonuçları results.jsonl'a yazar.
+"""Her senaryoyu 2 sistem x 2 mod = 4 koşulda, her koşulu birkaç kez çalıştırır; sonuçları results.jsonl'a yazar.
 
 Sistemler: "system" (asıl sistem: fiyatı kod hesaplar) ve "llm_only" (karşılaştırma).
 Modlar   : "single" (tek ürün) ve "bundle" (paket).
+Tekrar   : LLM mesajları rastgelelik içerdiği için her koşul --repeats kez çalıştırılır (varsayılan 3).
+           Asıl sistemde fiyatlar her tekrarda aynıdır; değişebilen mesajlar ve ihlallerdir.
 
 Çalıştırma (proje kökünden):
-  python -m eval.run_experiments                 # tüm deney, başlamadan önce onay ister
-  python -m eval.run_experiments --limit 2       # yalnızca ilk 2 senaryo (deneme)
-  python -m eval.run_experiments --yes           # onay sormadan başla
+  python -m eval.run_experiments                       # tüm deney, başlamadan önce onay ister
+  python -m eval.run_experiments --limit 2 --repeats 1 # deneme
+  python -m eval.run_experiments --yes                 # onay sormadan başla
 Yarıda kesilirse aynı komutla kaldığı yerden sürer.
 
 Dosyadaki her satır bir zarftır:
-  {"scenario_id", "system", "mode", "status": "ok" | "error", "error",
+  {"scenario_id", "system", "mode", "repeat", "status": "ok" | "error", "error",
    "input_tokens", "output_tokens", "llm_calls", "seconds", "result"}
 "result" alanı NegotiationResult'ın JSON halidir (hata varsa null).
 """
@@ -34,12 +36,12 @@ from baseline.llm_only import run_negotiation_llm_only # karşılaştırma siste
 # --------------------------------------------------------------------------------
 
 NegotiateFn = Callable[[Scenario, list[Listing], str], NegotiationResult]
+RunKey = tuple[str, str, str, int]   # (scenario_id, system, mode, repeat)
 MODES = ("single", "bundle")
 ROOT = Path(__file__).parent.parent
 
-# Süre tahmini için varsayımlar: bir pazarlık en çok 5 tur, turda 2 mesaj (alıcı + satıcı).
-MAX_LLM_CALLS_PER_RUN = 10
-SECONDS_PER_LLM_CALL = 3.0
+# Süre tahmini: 14 Kasım'da Ollama + gemma3:4b ile ölçülen ortalama çalıştırma süreleri (saniye).
+SECONDS_PER_RUN = {"system": 25.0, "llm_only": 100.0}
 
 
 def run_system(scenario: Scenario, listings: list[Listing], mode: str) -> NegotiationResult:
@@ -107,23 +109,28 @@ def read_records(path: str | Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def load_done(path: str | Path, include_errors: bool = True) -> set[tuple[str, str, str]]:
-    """Dosyada zaten bulunan (scenario_id, system, mode) üçlülerini döndürür.
+def record_key(record: dict) -> RunKey:
+    """Bir kaydın anahtarı. Eski kayıtlarda system ve repeat alanı yoksa "system" ve 0 sayılır."""
+    return (record["scenario_id"], record.get("system", "system"), record["mode"],
+            int(record.get("repeat", 0)))
+
+
+def load_done(path: str | Path, include_errors: bool = True) -> set[RunKey]:
+    """Dosyada zaten bulunan (scenario_id, system, mode, repeat) dörtlülerini döndürür.
 
     include_errors=False ise hata kayıtları "yapılmış" sayılmaz, yani tekrar denenir.
     """
-    return {(r["scenario_id"], r.get("system", "system"), r["mode"])
-            for r in read_records(path) if include_errors or r["status"] == "ok"}
+    return {record_key(r) for r in read_records(path) if include_errors or r["status"] == "ok"}
 
 
-def run_one(negotiate_fn: NegotiateFn, system: str, scenario: Scenario,
-            listings: list[Listing], mode: str, meter: TokenMeter) -> dict:
+def run_one(negotiate_fn: NegotiateFn, system: str, scenario: Scenario, listings: list[Listing],
+            mode: str, repeat: int, meter: TokenMeter) -> dict:
     """Tek bir pazarlığı çalıştırır ve zarf kaydını döndürür; hata olursa yakalayıp kaydeder.
 
     Token sayıları, çalıştırmadan önceki ve sonraki sayaç farkından bulunur.
     """
     record = {"scenario_id": scenario.scenario_id, "system": system, "mode": mode,
-              "status": "ok", "error": None, "result": None}
+              "repeat": repeat, "status": "ok", "error": None, "result": None}
     tokens_in, tokens_out, calls = meter.snapshot()
     started = time.perf_counter()
     try:
@@ -137,64 +144,81 @@ def run_one(negotiate_fn: NegotiateFn, system: str, scenario: Scenario,
     return record
 
 
-def pending_runs(scenarios: list[Scenario], done: set[tuple[str, str, str]],
-                 systems: dict[str, NegotiateFn]) -> list[tuple[int, Scenario, str, str]]:
-    """Henüz yapılmamış çalıştırmalar: (senaryo sırası, senaryo, sistem, mod)."""
-    return [(i, s, system, mode)
+def pending_runs(scenarios: list[Scenario], done: set[RunKey], systems: dict[str, NegotiateFn],
+                 repeats: int) -> list[tuple[int, Scenario, str, str, int]]:
+    """Henüz yapılmamış çalıştırmalar: (senaryo sırası, senaryo, sistem, mod, tekrar).
+
+    Sıra: önce tüm senaryoların 1. tekrarı, sonra 2. tekrarı... Böylece deney yarıda kalsa bile
+    elde her senaryonun en az bir sonucu olur.
+    """
+    return [(i, s, system, mode, rep)
+            for rep in range(repeats)
             for i, s in enumerate(scenarios, start=1)
             for system in systems for mode in MODES
-            if (s.scenario_id, system, mode) not in done]
+            if (s.scenario_id, system, mode, rep) not in done]
 
 
-def confirm(n_runs: int, n_skipped: int, mock: bool) -> bool:
-    """Toplam çağrı sayısını ve tahmini süreyi yazdırır, kullanıcıdan onay ister."""
-    max_calls = 0 if mock else n_runs * MAX_LLM_CALLS_PER_RUN
-    minutes = max_calls * SECONDS_PER_LLM_CALL / 60
-    print(f"Yapılacak çalıştırma: {n_runs}  (daha önce yapılmış, atlanacak: {n_skipped})")
+def estimate_seconds(todo: list[tuple], mock: bool) -> float:
+    """Kalan çalıştırmaların tahmini süresi (saniye). Mock modda neredeyse sıfır."""
+    if mock:
+        return 0.05 * len(todo)
+    return sum(SECONDS_PER_RUN.get(system, 60.0) for _, _, system, _, _ in todo)
+
+
+def confirm(todo: list[tuple], n_skipped: int, mock: bool) -> bool:
+    """Toplam çalıştırma ve çağrı sayısını, tahmini süreyi yazdırır, kullanıcıdan onay ister."""
+    minutes = estimate_seconds(todo, mock) / 60
+    by_system = {name: sum(1 for t in todo if t[2] == name) for name in SYSTEMS}
+    print(f"Yapılacak çalıştırma: {len(todo)}  (daha önce yapılmış, atlanacak: {n_skipped})")
+    print("  " + ", ".join(f"{name}: {n}" for name, n in by_system.items()))
     if mock:
         print("USE_MOCK_LLM=1: API çağrısı yapılmayacak, süre birkaç saniye.")
     else:
-        print(f"LLM çağrısı: en fazla {max_calls} "
-              f"({MAX_LLM_CALLS_PER_RUN} çağrı/çalıştırma üst sınırıyla)")
-        print(f"Tahmini süre: en fazla ~{minutes:.0f} dakika "
-              f"(çağrı başına {SECONDS_PER_LLM_CALL:.0f} sn varsayımıyla)")
+        print(f"LLM çağrısı: en fazla {len(todo) * 10} (çalıştırma başına en fazla 10)")
+        print(f"Tahmini süre: ~{minutes:.0f} dakika (~{minutes / 60:.1f} saat; asıl sistem "
+              f"{SECONDS_PER_RUN['system']:.0f} sn, llm_only {SECONDS_PER_RUN['llm_only']:.0f} sn "
+              f"çalıştırma başına, Ollama ölçümü)")
         print(f"Model: {os.getenv('MODEL_NAME', 'claude-haiku-5-5')}")
     return input("Devam edilsin mi? [e/h] ").strip().lower() in ("e", "evet", "y", "yes")
 
 
 def run_all(systems: dict[str, NegotiateFn], scenarios: list[Scenario], listings: list[Listing],
-            out_path: str | Path, retry_errors: bool = False, ask: bool = True) -> None:
-    """Tüm senaryo x sistem x mod çalıştırmalarını yapar; yapılmış olanları atlar.
+            out_path: str | Path, repeats: int = 3, retry_errors: bool = False,
+            ask: bool = True) -> None:
+    """Tüm senaryo x sistem x mod x tekrar çalıştırmalarını yapar; yapılmış olanları atlar.
 
     Başlamadan önce özet yazdırıp onay ister (ask=False ise sormaz). Her sonuç biter
     bitmez dosyaya eklenir; program kesilse bile o ana kadarki sonuçlar kaybolmaz.
     Sonunda dosyadaki tüm kayıtların token toplamını yazdırır.
     """
     done = load_done(out_path, include_errors=not retry_errors)
-    todo = pending_runs(scenarios, done, systems)
-    total_possible = len(scenarios) * len(systems) * len(MODES)
+    todo = pending_runs(scenarios, done, systems, repeats)
+    total_possible = len(scenarios) * len(systems) * len(MODES) * repeats
     mock = os.getenv("USE_MOCK_LLM") == "1"
     if not todo:
         print("Tüm çalıştırmalar zaten yapılmış.")
-    elif ask and not confirm(len(todo), total_possible - len(todo), mock):
+    elif ask and not confirm(todo, total_possible - len(todo), mock):
         print("İptal edildi; hiçbir çalıştırma yapılmadı.")
         return
 
     meter = TokenMeter()
     meter.install()
+    started = time.perf_counter()
     with open(out_path, "a", encoding="utf-8") as f:
-        for n, (i, scenario, system, mode) in enumerate(todo, start=1):
-            print(f"[{n}/{len(todo)}] senaryo {i}/{len(scenarios)} {scenario.scenario_id} "
-                  f"· {system} · {mode} ...", end=" ", flush=True)
-            record = run_one(systems[system], system, scenario, listings, mode, meter)
+        for n, (i, scenario, system, mode, rep) in enumerate(todo, start=1):
+            print(f"[{n}/{len(todo)}] tekrar {rep + 1}/{repeats} · senaryo {i}/{len(scenarios)} "
+                  f"{scenario.scenario_id} · {system} · {mode} ...", end=" ", flush=True)
+            record = run_one(systems[system], system, scenario, listings, mode, rep, meter)
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
             f.flush()
-            print(f"{record['status']}  {record['seconds']} sn, "
-                  f"{record['input_tokens']} girdi / {record['output_tokens']} çıktı token")
+            remaining = estimate_seconds(todo[n:], mock) / 60
+            print(f"{record['status']}  {record['seconds']} sn, {record['input_tokens']} girdi / "
+                  f"{record['output_tokens']} çıktı token  (kalan ~{remaining:.0f} dk)")
 
     records = read_records(out_path)
     errors = sum(r["status"] == "error" for r in records)
-    print(f"\nDosyadaki kayıt: {len(records)}  (hata: {errors})")
+    print(f"\nDosyadaki kayıt: {len(records)}  (hata: {errors}); bu oturum "
+          f"{(time.perf_counter() - started) / 60:.1f} dk sürdü")
     print(f"Toplam token: {sum(r.get('input_tokens', 0) for r in records)} girdi, "
           f"{sum(r.get('output_tokens', 0) for r in records)} çıktı  "
           f"({sum(r.get('llm_calls', 0) for r in records)} LLM çağrısı)")
@@ -202,10 +226,11 @@ def run_all(systems: dict[str, NegotiateFn], scenarios: list[Scenario], listings
 
 def main() -> None:
     """Komut satırı girişi: veri dosyalarını okur ve deneyi başlatır."""
-    parser = argparse.ArgumentParser(description="Pazarlık deneyi: 2 sistem x 2 mod")
+    parser = argparse.ArgumentParser(description="Pazarlık deneyi: 2 sistem x 2 mod x tekrar")
     parser.add_argument("--listings", default=ROOT / "data" / "listings.json")
     parser.add_argument("--scenarios", default=ROOT / "data" / "scenarios.json")
     parser.add_argument("--out", default=ROOT / "eval" / "results.jsonl")
+    parser.add_argument("--repeats", type=int, default=3, help="Her koşulun tekrar sayısı")
     parser.add_argument("--limit", type=int, default=None,
                         help="Yalnızca ilk N senaryoyu çalıştır (deneme için)")
     parser.add_argument("--retry-errors", action="store_true",
@@ -220,7 +245,7 @@ def main() -> None:
         pass
 
     scenarios = load_scenarios(args.scenarios)[:args.limit]
-    run_all(SYSTEMS, scenarios, load_listings(args.listings), args.out,
+    run_all(SYSTEMS, scenarios, load_listings(args.listings), args.out, repeats=args.repeats,
             retry_errors=args.retry_errors, ask=not args.yes)
 
 

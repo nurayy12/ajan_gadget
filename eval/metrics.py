@@ -2,8 +2,15 @@
 
 Çalıştırma (proje kökünden):  python -m eval.metrics
 Çıktılar eval/out/ klasörüne yazılır: summary.csv, summary.md ve üç PNG.
+eval/out/sensitivity.csv varsa (python -m eval.sensitivity) özet tabloya duyarlılık bölümü eklenir.
 
 Dört koşul vardır: sistem ("system" = asıl sistem, "llm_only") x mod ("single", "bundle").
+Her koşul birkaç kez tekrarlanmış olabilir ("repeat" alanı).
+
+Anlaşma alanı (kökteki ortak policy.py ile):
+  p_min = bundle_floor(ürünler)                       satıcının paket indirimli alt sınırı
+  p_max = max_affordable_price(ürünler, bütçe)        alıcının kargo dahil bütçeyle ödeyebileceği en yüksek fiyat
+  ZOPA  = p_max >= p_min (yoksa doğru davranış anlaşmamaktır)
 """
 import argparse
 import json
@@ -17,6 +24,7 @@ import pandas as pd
 from scipy.stats import wilcoxon
 
 from data.validate import load_listings, load_scenarios
+from policy import bundle_floor, buyer_shipping, max_affordable_price
 
 ROOT = Path(__file__).parent.parent
 SYSTEMS = ["system", "llm_only"]
@@ -28,56 +36,112 @@ MODE_COLORS = {"single": "#2a78d6", "bundle": "#eb6834"}
 # ihlali değil teknik hatadır; ihlal oranına katılmaz, ayrı sütunda raporlanır.
 LLM_ERROR = "llm_error"
 
+# AgenticPay (arXiv 2602.06008, Algoritma 1) skor parametreleri.
+GAMMA = 0.99          # tur başına verimlilik indirimi
+DEAL_BONUS = 30.0     # D
+QUALITY_WEIGHT = 55.0 # W
+EFFICIENCY = 15.0     # E
+FAIL_PENALTY = 15.0   # F
+T_MAX = 5             # bu projedeki en fazla tur
+EPS = 0.01            # TL; kuruş yuvarlamasına tolerans
+
+
+def agenticpay_scores(deal: bool, price: float | None, p_min: float, p_max: float,
+                      rounds: int, t_max: int = T_MAX) -> tuple[float, float, float]:
+    """AgenticPay skorları: (alıcı skoru, satıcı skoru, genel skor).
+
+    Geçerli anlaşma (fiyat [p_min, p_max] aralığında ve aralık boş değil):
+      d = γ^(tur-1), r_b = (p_max - p)/(p_max - p_min), r_s = (p - p_min)/(p_max - p_min)
+      alıcı = d·(D + W·r_b + E), satıcı = d·(D + W·r_s + E), genel = d·(D + W·4·r_b·r_s + E)
+    Anlaşma yoksa ya da fiyat aralık dışındaysa (AgenticPay'de geçersiz işlem):
+      d = γ^(T-1) ve üç skor da -F·(1 - d).
+    """
+    zone = p_max - p_min
+    valid = (deal and price is not None and zone > EPS
+             and p_min - EPS <= price <= p_max + EPS)
+    if not valid:
+        penalty = -FAIL_PENALTY * (1 - GAMMA ** (t_max - 1))
+        return penalty, penalty, penalty
+    d = GAMMA ** (rounds - 1)
+    r_b = min(1.0, max(0.0, (p_max - price) / zone))
+    r_s = 1.0 - r_b
+    return (d * (DEAL_BONUS + QUALITY_WEIGHT * r_b + EFFICIENCY),
+            d * (DEAL_BONUS + QUALITY_WEIGHT * r_s + EFFICIENCY),
+            d * (DEAL_BONUS + QUALITY_WEIGHT * 4 * r_b * r_s + EFFICIENCY))
+
+
+def shipping_saving(items: list, price: float) -> float:
+    """Paketin kargo tasarrufu (TL): ürünler ayrı ayrı alınsaydı ödenecek kargo − paketin kargosu.
+
+    Ayrı alımların fiyatı, anlaşılan paket fiyatı liste fiyatlarıyla orantılı bölünerek varsayılır;
+    her parçaya Dolap kuralı (policy.buyer_shipping) ayrı uygulanır. Tek üründe 0.
+    """
+    if len(items) < 2:
+        return 0.0
+    list_total = sum(l.list_price for l in items)
+    separate = sum(buyer_shipping([l], price * l.list_price / list_total) for l in items)
+    return separate - buyer_shipping(items, price)
+
 
 def load_results(results_path: str | Path, listings_path: str | Path,
                  scenarios_path: str | Path) -> pd.DataFrame:
     """Sonuçları okur ve çalıştırma başına bir satırlık tablo döndürür.
 
-    NegotiationResult içinde liste fiyatı, alt sınır, kargo ve bütçe olmadığı için
-    bunlar ilan ve senaryo dosyalarından eklenir. Hata kayıtları atılır; aynı
-    (senaryo, sistem, mod) birden fazla kez varsa son kayıt kullanılır.
+    NegotiationResult içinde liste fiyatı, alt sınır, kargo ve bütçe olmadığı için bunlar ilan
+    ve senaryo dosyalarından eklenir. Hata kayıtları atılır; aynı (senaryo, sistem, mod, tekrar)
+    birden fazla kez varsa son kayıt kullanılır.
 
-    Türetilen sütunlar (yalnızca anlaşma varsa dolu, yoksa NaN):
-      discount = (liste toplamı - anlaşılan fiyat) / liste toplamı
-      utility  = (p_max - p) / (p_max - p_min)
-                 p_max = min(bütçe - kargo, liste toplamı), p_min = alt sınırlar toplamı
+    Türetilen sütunlar:
+      p_min, p_max, zopa        anlaşma alanı
+      discount                  (liste toplamı - fiyat) / liste toplamı        (anlaşma varsa)
+      in_zone, out_of_zone      fiyat [p_min, p_max] içinde mi                 (anlaşma varsa)
+      utility                   alıcı faydası r_b (AgenticPay)                 (geçerli anlaşmada)
+      buyer_score, seller_score, global_score   AgenticPay skorları           (her çalıştırmada)
+      ship_saving               paketin kargo tasarrufu (TL)                    (anlaşma varsa)
     """
     listings = {l.listing_id: l for l in load_listings(listings_path)}
     scenarios = {s.scenario_id: s for s in load_scenarios(scenarios_path)}
 
-    latest: dict[tuple[str, str, str], dict] = {}
+    latest: dict[tuple, dict] = {}
     for line in Path(results_path).read_text(encoding="utf-8").splitlines():
         if line.strip():
-            record = json.loads(line)
-            record.setdefault("system", "system")
-            latest[(record["scenario_id"], record["system"], record["mode"])] = record
+            r = json.loads(line)
+            key = (r["scenario_id"], r.get("system", "system"), r["mode"], int(r.get("repeat", 0)))
+            latest[key] = r
 
     rows = []
-    for record in latest.values():
+    for (scenario_id, system, mode, repeat), record in latest.items():
         if record["status"] != "ok":
             continue
         res = record["result"]
-        scenario = scenarios[res["scenario_id"]]
+        scenario = scenarios[scenario_id]
         items = [listings[i] for i in res["listing_ids"] if i in listings]
+        if not items:
+            continue
         list_total = sum(l.list_price for l in items)
-        floor_total = sum(l.floor_price for l in items)
-        # Paket tek kargo öder: hedef ilanın kargosu (alıcı modülüyle aynı kural).
-        shipping = listings[scenario.target_listing_id].shipping_cost
+        p_min = bundle_floor(items)
+        p_max = max_affordable_price(items, scenario.budget)
         price = res["final_price"]
-        deal = bool(res["deal"]) and price is not None and list_total > 0
+        deal = bool(res["deal"]) and price is not None
 
-        discount = utility = float("nan")
+        nan = float("nan")
+        discount = utility = ship = nan
+        in_zone = False
         if deal:
             discount = (list_total - price) / list_total
-            p_max = min(scenario.budget - shipping, list_total)
-            if p_max > floor_total:
-                utility = (p_max - price) / (p_max - floor_total)
+            in_zone = p_min - EPS <= price <= p_max + EPS
+            ship = shipping_saving(items, price)
+            if in_zone and p_max - p_min > EPS:
+                utility = (p_max - price) / (p_max - p_min)
+        buyer_s, seller_s, global_s = agenticpay_scores(deal, price, p_min, p_max, res["rounds"])
 
         rows.append({
-            "scenario_id": res["scenario_id"], "system": record["system"], "mode": res["mode"],
-            "deal": deal, "final_price": price, "n_items": len(items),
-            "list_total": list_total, "floor_total": floor_total,
-            "discount": discount, "utility": utility, "rounds": res["rounds"],
+            "scenario_id": scenario_id, "system": system, "mode": mode, "repeat": repeat,
+            "deal": deal, "final_price": price, "n_items": len(items), "list_total": list_total,
+            "p_min": p_min, "p_max": p_max, "zopa": p_max >= p_min - EPS,
+            "discount": discount, "in_zone": in_zone, "out_of_zone": deal and not in_zone,
+            "utility": utility, "buyer_score": buyer_s, "seller_score": seller_s,
+            "global_score": global_s, "ship_saving": ship, "rounds": res["rounds"],
             "violations": res["violations"],
             "has_violation": any(v != LLM_ERROR for v in res["violations"]),
             "has_llm_error": LLM_ERROR in res["violations"],
@@ -85,11 +149,24 @@ def load_results(results_path: str | Path, listings_path: str | Path,
     return pd.DataFrame(rows)
 
 
-def summarize(df: pd.DataFrame) -> pd.DataFrame:
-    """Dört satırlık özet tablo: sistem x mod.
+def per_scenario(df: pd.DataFrame) -> pd.DataFrame:
+    """Tekrarları (senaryo, sistem, mod) bazında ortalar.
 
-    Anlaşma oranı, tur sayısı ve ihlal oranı tüm çalıştırmalar üzerinden;
-    indirim ve alıcı faydası yalnızca anlaşmayla bitenler üzerinden hesaplanır.
+    deal_rate tekrarların kaçında anlaşma olduğu; discount ve utility yalnızca anlaşmalı
+    tekrarların ortalaması (hiç anlaşma yoksa NaN).
+    """
+    return (df.groupby(["scenario_id", "system", "mode"])
+              .agg(deal_rate=("deal", "mean"), discount=("discount", "mean"),
+                   utility=("utility", "mean"), buyer_score=("buyer_score", "mean"),
+                   n_items=("n_items", "max"), repeats=("repeat", "nunique"))
+              .reset_index())
+
+
+def summarize(df: pd.DataFrame) -> pd.DataFrame:
+    """Dört satırlık özet tablo: sistem x mod (tüm tekrarlar birlikte).
+
+    Anlaşma oranı, AgenticPay skorları, tur, ihlal, LLM hatası ve ZOPA tüm çalıştırmalar üzerinden;
+    indirim ve kargo tasarrufu anlaşmayla bitenler, alıcı faydası geçerli anlaşmalar üzerinden.
     """
     rows = []
     for system in SYSTEMS:
@@ -97,16 +174,23 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
             g = df[(df["system"] == system) & (df["mode"] == mode)]
             if g.empty:
                 continue
+            deals = g[g["deal"]]
             rows.append({
                 "Sistem": SYSTEM_LABELS[system],
                 "Mod": MODE_LABELS[mode],
                 "Çalıştırma": len(g),
+                "Senaryo": g["scenario_id"].nunique(),
                 "Anlaşma oranı (%)": 100 * g["deal"].mean(),
                 "Ort. indirim (%)": 100 * g["discount"].mean(),
                 "Ort. alıcı faydası": g["utility"].mean(),
+                "AgenticPay alıcı skoru": g["buyer_score"].mean(),
+                "AgenticPay genel skor": g["global_score"].mean(),
                 "Ort. tur": g["rounds"].mean(),
                 "İhlal oranı (%)": 100 * g["has_violation"].mean(),
+                "Aralık dışı anlaşma": int(g["out_of_zone"].sum()),
                 "LLM hatalı çalıştırma": int(g["has_llm_error"].sum()),
+                "ZOPA'sız çalıştırma": int((~g["zopa"]).sum()),
+                "Ort. kargo tasarrufu (TL)": deals["ship_saving"].mean() if len(deals) else float("nan"),
             })
     return pd.DataFrame(rows)
 
@@ -125,22 +209,31 @@ def violation_counts(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def paired_discounts(df: pd.DataFrame, system: str = "system") -> pd.DataFrame:
-    """Bir sistemde iki modda da anlaşmayla biten senaryoların indirimleri (sütunlar: single, bundle)."""
-    deals = df[(df["system"] == system) & df["deal"]]
-    wide = deals.pivot(index="scenario_id", columns="mode", values="discount")
-    return wide.reindex(columns=MODES).dropna()
+    """Eşleştirilmiş indirimler (sütunlar: single, bundle), senaryo başına tekrar ortalamasıyla.
+
+    Yalnızca paket modunda gerçekten birden fazla ürünün pazarlık edildiği ve iki modda da en az
+    bir anlaşmanın olduğu senaryolar alınır. Paket kurulamayan senaryolarda iki mod aynı ürün
+    olduğu için karşılaştırmaya bilgi katmaz.
+    """
+    ps = per_scenario(df[df["system"] == system])
+    bundled = set(ps[(ps["mode"] == "bundle") & (ps["n_items"] > 1)]["scenario_id"])
+    wide = ps.pivot(index="scenario_id", columns="mode", values="discount").reindex(columns=MODES)
+    return wide[wide.index.isin(bundled)].dropna()
 
 
 def paired_test(df: pd.DataFrame) -> dict:
     """Karşılaştırma 1: asıl sistemde paket ve tek ürün indirimi farklı mı? (Wilcoxon, eşleştirilmiş)
 
-    Yalnızca asıl sistemde iki modda da anlaşmayla biten senaryolar kullanılır.
-    Döndürür: {"n", "statistic", "p_value"}; test uygulanamazsa (çift yok ya da
+    Döndürür: {"n", "statistic", "p_value", "median_diff"}; test uygulanamazsa (çift yok ya da
     tüm farklar sıfır) statistic ve p_value None olur.
     """
     wide = paired_discounts(df)
-    out = {"n": len(wide), "statistic": None, "p_value": None}
-    if len(wide) == 0 or (wide["bundle"] == wide["single"]).all():
+    out = {"n": len(wide), "statistic": None, "p_value": None, "median_diff": None}
+    if len(wide) == 0:
+        return out
+    diff = wide["bundle"] - wide["single"]
+    out["median_diff"] = float(diff.median())
+    if (diff.abs() < 1e-12).all():
         return out
     stat, p = wilcoxon(wide["bundle"], wide["single"])
     out.update(statistic=float(stat), p_value=float(p))
@@ -148,10 +241,7 @@ def paired_test(df: pd.DataFrame) -> dict:
 
 
 def violation_comparison(df: pd.DataFrame) -> pd.DataFrame:
-    """Karşılaştırma 2: paket modunda asıl sistem ve yalnızca-LLM'in ihlal oranı.
-
-    Örneklem küçük olduğu için istatistik testi yapılmaz; yalnızca sayılar ve oranlar verilir.
-    """
+    """Karşılaştırma 2: paket modunda asıl sistem ve yalnızca-LLM'in ihlal oranı (test yapılmaz)."""
     rows = []
     for system in SYSTEMS:
         g = df[(df["system"] == system) & (df["mode"] == "bundle")]
@@ -160,6 +250,23 @@ def violation_comparison(df: pd.DataFrame) -> pd.DataFrame:
         rows.append({"Sistem": SYSTEM_LABELS[system], "Çalıştırma (n)": len(g),
                      "İhlalli çalıştırma": int(g["has_violation"].sum()),
                      "İhlal oranı (%)": 100 * g["has_violation"].mean()})
+    return pd.DataFrame(rows)
+
+
+def zopa_table(df: pd.DataFrame) -> pd.DataFrame:
+    """Anlaşma alanı olmayan çalıştırmalar: orada doğru davranış anlaşmamaktır.
+
+    "Anlaşma" sütunu bu çalıştırmalarda yapılan (dolayısıyla bir kuralı çiğneyen) anlaşma sayısıdır.
+    """
+    rows = []
+    for system in SYSTEMS:
+        for mode in MODES:
+            g = df[(df["system"] == system) & (df["mode"] == mode) & (~df["zopa"])]
+            if g.empty:
+                continue
+            rows.append({"Sistem": SYSTEM_LABELS[system], "Mod": MODE_LABELS[mode],
+                         "ZOPA'sız çalıştırma": len(g), "Anlaşma": int(g["deal"].sum()),
+                         "Doğru davranış (%)": 100 * (1 - g["deal"].mean())})
     return pd.DataFrame(rows)
 
 
@@ -216,19 +323,20 @@ def plot_paired(df: pd.DataFrame, out_path: str | Path) -> None:
     """Grafik 2: asıl sistemde senaryo bazında eşleştirilmiş nokta grafiği (her çizgi bir senaryo)."""
     wide = 100 * paired_discounts(df)
 
-    fig, ax = _new_axes((5, 5))
+    fig, ax = _new_axes((5, 5.5))
     for scenario_id, row in wide.iterrows():
-        ax.plot([0, 1], [row["single"], row["bundle"]], color="#b5b4ab", linewidth=1.2, zorder=1)
-        ax.text(1.05, row["bundle"], scenario_id, va="center", fontsize=7, color="#52514e")
+        ax.plot([0, 1], [row["single"], row["bundle"]], color="#b5b4ab", linewidth=1.0, zorder=1)
     for i, m in enumerate(MODES):
-        ax.scatter([i] * len(wide), wide[m], s=55, color=MODE_COLORS[m],
+        ax.scatter([i] * len(wide), wide[m], s=40, color=MODE_COLORS[m],
                    edgecolor="#fcfcfb", linewidth=1.5, zorder=2)
     ax.set_xticks([0, 1])
     ax.set_xticklabels([MODE_LABELS[m] for m in MODES])
-    ax.set_xlim(-0.3, 1.4)
+    ax.set_xlim(-0.3, 1.3)
     ax.set_ylabel("İndirim (%)")
     ax.set_title(f"Asıl sistem: senaryo bazında indirim (n={len(wide)})",
                  loc="left", color="#0b0b0b")
+    ax.text(0, -0.12, "Her çizgi bir senaryo; tekrarların ortalaması. Yalnızca paket kurulan senaryolar.",
+            transform=ax.transAxes, fontsize=8, color="#52514e")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
@@ -253,31 +361,69 @@ def plot_violation_rate(df: pd.DataFrame, out_path: str | Path) -> None:
 def _to_markdown(table: pd.DataFrame) -> str:
     """DataFrame'i Markdown tablosuna çevirir (ek kütüphane gerektirmeden)."""
     def fmt(v):
-        return f"{v:.2f}" if isinstance(v, float) else str(v)
-    lines = ["| " + " | ".join(table.columns) + " |",
+        if isinstance(v, float):
+            return "—" if pd.isna(v) else f"{v:.2f}"
+        return str(v)
+    lines = ["| " + " | ".join(str(c) for c in table.columns) + " |",
              "|" + "---|" * len(table.columns)]
     for _, row in table.iterrows():
         lines.append("| " + " | ".join(fmt(v) for v in row) + " |")
     return "\n".join(lines)
 
 
-def save_summary(summary: pd.DataFrame, violations: pd.DataFrame, test: dict,
-                 comparison: pd.DataFrame, out_dir: str | Path) -> None:
-    """Özet tabloyu summary.csv ve summary.md olarak kaydeder; md dosyasına iki karşılaştırma ve ihlal sayımı da eklenir."""
+def sensitivity_section(sens_path: str | Path) -> list[str]:
+    """eval/sensitivity.py çıktısı varsa, alıcı açılışı %70 için kısa bir duyarlılık tablosu döndürür."""
+    sens_path = Path(sens_path)
+    if not sens_path.exists():
+        return []
+    sens = pd.read_csv(sens_path)
+    base = sens[(sens["start_fraction"] - 0.70).abs() < 1e-9]
+    wide = base.pivot_table(index=["buyer_beta", "seller_beta"], columns="mode",
+                            values=["deal_rate", "mean_discount"]).reset_index()
+    table = pd.DataFrame({
+        "Alıcı β": wide["buyer_beta"], "Satıcı β": wide["seller_beta"],
+        "Anlaşma tek ürün (%)": 100 * wide[("deal_rate", "single")],
+        "Anlaşma paket (%)": 100 * wide[("deal_rate", "bundle")],
+        "İndirim tek ürün (%)": 100 * wide[("mean_discount", "single")],
+        "İndirim paket (%)": 100 * wide[("mean_discount", "bundle")],
+    })
+    return ["## Duyarlılık analizi (asıl sistem, LLM'siz, alıcı açılışı %70)", "",
+            _to_markdown(table), "",
+            f"Tüm ızgara (açılış %60/%70/%80): {sens_path.name}. "
+            "Isı haritaları: duyarlilik_anlasma.png, duyarlilik_indirim.png.", ""]
+
+
+def save_summary(df: pd.DataFrame, out_dir: str | Path) -> None:
+    """Özet tabloyu summary.csv ve summary.md olarak kaydeder; md dosyasına karşılaştırmalar,
+    ZOPA tablosu, ihlal sayımı ve (varsa) duyarlılık analizi eklenir."""
     out_dir = Path(out_dir)
+    summary = summarize(df)
     summary.round(3).to_csv(out_dir / "summary.csv", index=False, encoding="utf-8")
 
+    test = paired_test(df)
     if test["p_value"] is None:
-        test_line = f"Wilcoxon testi uygulanamadı (eşleşmiş senaryo sayısı n = {test['n']})."
+        test_line = (f"Wilcoxon testi uygulanamadı (eşleşmiş senaryo sayısı n = {test['n']}"
+                     + (", tüm farklar sıfır" if test["n"] else "") + ").")
     else:
-        test_line = (f"Wilcoxon işaretli sıralar testi (indirim, paket - tek ürün): "
-                     f"n = {test['n']}, W = {test['statistic']:.1f}, p = {test['p_value']:.4f}")
-    parts = ["# Deney özeti", "", _to_markdown(summary), "",
-             "## Karşılaştırma 1: asıl sistemde tek ürün ve paket indirimi", "", test_line, "",
+        test_line = (f"Wilcoxon işaretli sıralar testi (indirim, paket − tek ürün): "
+                     f"n = {test['n']} senaryo, medyan fark = {100 * test['median_diff']:.2f} puan, "
+                     f"W = {test['statistic']:.1f}, p = {test['p_value']:.4f}")
+    repeats = int(df["repeat"].nunique()) if len(df) else 0
+    violations = violation_counts(df)
+    zopa = zopa_table(df)
+    parts = ["# Deney özeti", "",
+             f"Tekrar sayısı: {repeats}. Anlaşma alanı p_min = paket indirimli alt sınır, "
+             "p_max = bütçeyle ödenebilecek en yüksek fiyat (Dolap kargo kuralıyla).", "",
+             _to_markdown(summary), "",
+             "## Karşılaştırma 1: asıl sistemde tek ürün ve paket indirimi", "", test_line,
+             "Senaryo başına tekrar ortalaması kullanıldı; yalnızca paket kurulan senaryolar.", "",
              "## Karşılaştırma 2: paket modunda ihlal oranı (test yapılmadı)", "",
-             _to_markdown(comparison), "",
+             _to_markdown(violation_comparison(df)), "",
+             "## Anlaşma alanı olmayan çalıştırmalar", "",
+             _to_markdown(zopa) if not zopa.empty else "Tüm çalıştırmalarda anlaşma alanı var.", "",
              "## İhlal türleri", "",
-             _to_markdown(violations.reset_index()) if not violations.empty else "İhlal yok.", ""]
+             _to_markdown(violations.reset_index()) if not violations.empty else "İhlal yok.", "",
+             *sensitivity_section(out_dir / "sensitivity.csv")]
     (out_dir / "summary.md").write_text("\n".join(parts), encoding="utf-8")
 
 
@@ -294,8 +440,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     df = load_results(args.results, args.listings, args.scenarios)
 
-    save_summary(summarize(df), violation_counts(df), paired_test(df),
-                 violation_comparison(df), out_dir)
+    save_summary(df, out_dir)
     plot_mean_discount(df, out_dir / "ortalama_indirim.png")
     plot_paired(df, out_dir / "eslestirilmis_indirim.png")
     plot_violation_rate(df, out_dir / "ihlal_orani.png")

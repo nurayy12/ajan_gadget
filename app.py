@@ -17,7 +17,9 @@ from pathlib import Path
 import streamlit as st
 
 from schemas import Listing, NegotiationResult, Offer, Scenario
+from data.generate import SHIPPING_TARIFF
 from data.validate import load_listings, match_need
+from policy import bundle_discount_rate, buyer_shipping
 
 # ---- GERÇEK FONKSİYONLAR -------------------------------------------------------
 from buyer.agent import buyer_turn
@@ -88,18 +90,50 @@ def run_agent(run_fn, wanted: str, budget: float, wishlist: list[str],
         if not accepted or result.final_price is None:
             continue
         items = [by_id[i] for i in result.listing_ids]
-        total_to_pay = result.final_price + target.shipping_cost
+        shipping = buyer_shipping(items, result.final_price)
+        total_to_pay = result.final_price + shipping
         if total_to_pay > budget:
             continue
         list_total = sum(l.list_price for l in items)
-        shipping_saving = (len(items) - 1) * target.shipping_cost
+        shipping_saving = separate_shipping(items, result.final_price) - shipping
         offers[target.listing_id] = {
             "result": result, "seller_id": target.seller_id, "items": items,
             "list_total": list_total, "total_to_pay": total_to_pay,
+            "shipping_text": offer_shipping_text(items, result.final_price),
             "saving": list_total - result.final_price + shipping_saving,
             "buyer_ok": False, "seller_ok": False, "deal": False,
         }
     return offers
+
+
+PACKAGE_NAMES = {fee: name for name, fee in SHIPPING_TARIFF.items()}
+
+
+def separate_shipping(items: list[Listing], price: float) -> float:
+    """Ürünler ayrı ayrı alınsaydı ödenecek toplam kargo (paket fiyatı liste fiyatlarıyla orantılı bölünür).
+
+    eval/metrics.shipping_saving ile aynı varsayım; Dolap kuralı her parçaya ayrı uygulanır.
+    """
+    list_total = sum(l.list_price for l in items)
+    return sum(buyer_shipping([l], price * l.list_price / list_total) for l in items)
+
+
+def offer_shipping_text(items: list[Listing], price: float) -> str:
+    """Kargoyu kimin ödediğini Dolap kuralıyla anlatır (250 TL altı alıcı, 250-399 paylaşımlı, 400+ satıcı)."""
+    fee = buyer_shipping(items, price)
+    if fee == 0:
+        return "Kargo satıcıdan (sepet 400 TL ve üzeri)"
+    if price >= 250:
+        return f"Kargo: {fee:.2f} TL (alıcı ile satıcı paylaşıyor)"
+    return f"Kargo: {fee:.2f} TL (sepet 250 TL altı, alıcı öder)"
+
+
+def bundle_badge(items: list[Listing]) -> str:
+    """Paket kartı rozeti: satıcının paket indirim kademesi (2 ürün %5, 3+ ürün %10)."""
+    if len(items) < 2:
+        return "Tek ürün"
+    return (f"Sepet teklifi: %{100 * bundle_discount_rate(len(items)):.0f} · "
+            f"istek listenden +{len(items) - 1} ürün")
 
 
 def render_chat(offers: list[Offer]) -> None:
@@ -121,7 +155,7 @@ def render_listing_grid(listings: list[Listing], columns: int = 3) -> None:
             st.markdown(f"**{l.title}**")
             st.caption(f"{l.category} · {l.size or 'standart'} · {l.condition} · satıcı {l.seller_id}")
             st.write(l.description)
-            st.markdown(f"**{l.list_price:.0f} TL** · kargo {l.shipping_cost:.2f} TL")
+            st.markdown(f"**{l.list_price:.0f} TL** · {PACKAGE_NAMES.get(l.shipping_cost, '')} paket")
 
 
 def status_text(offer: dict) -> str:
@@ -137,14 +171,13 @@ def render_offer_card(key: str, offer: dict, rank: int, report_fn, listings: lis
     """Alıcı ekranındaki teklif kartı: ürünler, fiyatlar, kazanç, mesajlar ve onay butonu."""
     result: NegotiationResult = offer["result"]
     with st.container(border=True):
-        badge = (f"Paket: istek listenden +{len(offer['items']) - 1} ürün"
-                 if len(offer["items"]) > 1 else "Tek ürün")
-        st.markdown(f"#### {rank}. teklif · satıcı {offer['seller_id']} · {badge}")
+        st.markdown(f"#### {rank}. teklif · satıcı {offer['seller_id']} · {bundle_badge(offer['items'])}")
         st.write(" + ".join(l.title for l in offer["items"]))
         c1, c2, c3 = st.columns(3)
         c1.metric("Liste toplamı", f"{offer['list_total']:.0f} TL")
         c2.metric("Ödenecek (kargo dahil)", f"{offer['total_to_pay']:.0f} TL")
-        c3.metric("Kazanç", f"{offer['saving']:.0f} TL")
+        c3.metric("Kazanç (kargo dahil)", f"{offer['saving']:.0f} TL")
+        st.caption(offer["shipping_text"])
         with st.expander("Pazarlık mesajları ve ajan raporu"):
             render_chat(result.offers)
             # Onay öncesinde deal=False olabilir; rapor anlaşılan fiyatı göstersin diye kopyada True yapılır.
@@ -219,6 +252,7 @@ def seller_page(seller_id: str, approve_fn, listings: list[Listing]) -> None:
             result: NegotiationResult = offer["result"]
             with st.container(border=True):
                 st.markdown("#### " + " + ".join(l.title for l in offer["items"]))
+                st.caption(bundle_badge(offer["items"]) + " · " + offer["shipping_text"])
                 c1, c2 = st.columns(2)
                 c1.metric("Liste toplamı", f"{offer['list_total']:.0f} TL")
                 c2.metric("Ajanının anlaştığı fiyat", f"{result.final_price:.0f} TL")

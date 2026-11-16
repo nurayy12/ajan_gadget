@@ -71,9 +71,11 @@ def bundle_feasible(scenario: Scenario, listings: list[Listing]) -> bool:
     candidates = bundle_candidates(scenario, listings)
     if not candidates:
         return False
-    cheapest = min(c.list_price for c in candidates)
-    first_offer = BUYER_START_FRACTION * (target.list_price + cheapest)
-    return first_offer + target.shipping_cost <= scenario.budget
+    cheapest = min(candidates, key=lambda c: c.list_price)
+    first_offer = BUYER_START_FRACTION * (target.list_price + cheapest.list_price)
+    # Dolap'ta sepet kargosu en büyük paketin ücretidir.
+    shipping = max(target.shipping_cost, cheapest.shipping_cost)
+    return first_offer + shipping <= scenario.budget
 
 
 def check_listings(listings: list[Listing]) -> list[str]:
@@ -82,13 +84,14 @@ def check_listings(listings: list[Listing]) -> list[str]:
     ids = [l.listing_id for l in listings]
     if len(ids) != len(set(ids)):
         errors.append("Tekrarlanan listing_id var")
-    shipping: dict[str, float] = {}
+    from data.generate import SHIPPING_TARIFF  # döngüsel import olmasın diye burada
     for l in listings:
         ratio = l.floor_price / l.list_price
         if not 0.70 <= ratio <= 0.85:
             errors.append(f"{l.listing_id}: alt sınır oranı {ratio:.2f} (%70-85 dışında)")
-        if shipping.setdefault(l.seller_id, l.shipping_cost) != l.shipping_cost:
-            errors.append(f"{l.seller_id}: kargo ücreti ilanlar arasında farklı")
+        # Kargo artık satıcı başına sabit değil; ilanın paket boyutuna göre Dolap tarifesinden gelir.
+        if l.shipping_cost not in SHIPPING_TARIFF.values():
+            errors.append(f"{l.listing_id}: kargo ücreti {l.shipping_cost} Dolap tarifesinde yok")
     return errors
 
 
@@ -108,9 +111,37 @@ def check_scenarios(scenarios: list[Scenario], listings: list[Listing]) -> list[
             errors.append(f"{s.scenario_id}: need_list 2-4 madde olmalı")
         if not bundle_candidates(s, listings):
             errors.append(f"{s.scenario_id}: aynı satıcıda eşleşen başka ilan yok")
-        if target.floor_price + target.shipping_cost > s.budget:
-            errors.append(f"{s.scenario_id}: bütçe hedef ürüne bile yetmiyor")
+        # Bütçenin alt sınıra yetmemesi artık hata değil: dar senaryolarda bilerek anlaşma alanı
+        # kalmayabilir. Bunu main() içindeki ZOPA raporu gösterir.
     return errors
+
+
+def zopa(items: list[Listing], budget: float) -> bool | None:
+    """Anlaşma alanı (ZOPA) var mı: max_affordable_price(items, bütçe) >= bundle_floor(items).
+
+    Alıcının ödeyebileceği en yüksek fiyat, satıcının paket indirimli alt sınırına yetiyorsa True.
+    policy.py henüz yoksa None döner (rapor bu sütunu boş bırakır).
+    """
+    try:
+        from policy import bundle_floor, max_affordable_price
+    except ImportError:
+        return None
+    return max_affordable_price(items, budget) >= bundle_floor(items)
+
+
+def scenario_report(scenario: Scenario, listings: list[Listing]) -> dict:
+    """Bir senaryo için rapor satırı: aday sayısı, paket mümkün mü, alıcı modülünün paketi, iki modda ZOPA."""
+    from buyer.bundle import select_bundle
+    by_id = {l.listing_id: l for l in listings}
+    target = by_id[scenario.target_listing_id]
+    bundle = select_bundle(scenario, listings, "bundle")
+    return {
+        "candidates": len(bundle_candidates(scenario, listings)),
+        "feasible": bundle_feasible(scenario, listings),
+        "bundle_size": len(bundle),
+        "zopa_single": zopa([target], scenario.budget),
+        "zopa_bundle": zopa(bundle, scenario.budget),
+    }
 
 
 def main() -> None:
@@ -125,27 +156,23 @@ def main() -> None:
     print(f"sample_listings.json: {len(sample)} ilan, "
           f"3+ ilanlı satıcı: {len(multi_listing_sellers(sample))}")
 
-    try:  # alıcı modülü varsa onun gerçek paket seçimini de göster
-        from buyer.bundle import select_bundle
-    except ImportError:
-        select_bundle = None
-
     print(f"\nscenarios.json: {len(scenarios)} senaryo")
-    feasible_count = real_count = 0
-    for s in scenarios:
-        candidates = bundle_candidates(s, listings)
-        feasible = bundle_feasible(s, listings)
-        feasible_count += feasible
-        line = (f"  {s.scenario_id}: hedef={s.target_listing_id}  aday={len(candidates)}  "
-                f"paket {'MÜMKÜN' if feasible else 'mümkün değil'}")
-        if select_bundle is not None:
-            size = len(select_bundle(s, listings, "bundle"))
-            real_count += size > 1
-            line += f"  | alıcı modülü: {size} ürün"
-        print(line)
-    print(f"Paket mümkün: {feasible_count}/{len(scenarios)}")
-    if select_bundle is not None:
-        print(f"Alıcı modülünün paket kurduğu senaryo: {real_count}/{len(scenarios)}")
+    rows = [scenario_report(s, listings) for s in scenarios]
+    def yn(v):
+        return "?" if v is None else ("var" if v else "YOK")
+    for s, r in zip(scenarios, rows):
+        print(f"  {s.scenario_id}: hedef={s.target_listing_id}  aday={r['candidates']}  "
+              f"paket {'MÜMKÜN' if r['feasible'] else 'mümkün değil'}  | alıcı modülü: "
+              f"{r['bundle_size']} ürün  | ZOPA tek ürün: {yn(r['zopa_single'])}, paket: {yn(r['zopa_bundle'])}")
+    print(f"Paket mümkün: {sum(r['feasible'] for r in rows)}/{len(scenarios)}")
+    print(f"Alıcı modülünün paket kurduğu senaryo: {sum(r['bundle_size'] > 1 for r in rows)}/{len(scenarios)}")
+    if rows and rows[0]["zopa_single"] is None:
+        print("ZOPA hesaplanmadı: kökte policy.py henüz yok.")
+    else:
+        no_zopa = [(s.scenario_id, m) for s, r in zip(scenarios, rows)
+                   for m in ("single", "bundle") if not r[f"zopa_{m}"]]
+        print(f"Anlaşma alanı olmayan senaryo-mod çifti: {len(no_zopa)} "
+              f"(hata değil; bu çalıştırmalarda doğru davranış anlaşmamaktır) {no_zopa}")
 
     errors = check_listings(listings) + check_listings(sample) + check_scenarios(scenarios, listings)
     if errors:
