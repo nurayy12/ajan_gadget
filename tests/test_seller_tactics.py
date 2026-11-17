@@ -244,3 +244,41 @@ def test_buyer_falls_back_to_template_after_two_bad_messages(monkeypatch):
     monkeypatch.delenv("USE_MOCK_LLM", raising=False)
     msg = bl.write_message(["Vintage deri evrak çantası"], False, 3, [], tactic="yumusatma", scenario_id="S")
     assert msg in bl._TACTIC_TEMPLATES[("yumusatma", False)]
+
+
+def test_polish_does_not_corrupt_words_and_fixes_we_form():
+    from core.seller import polish_seller_message
+    kemer = [_item(title="Hakiki deri kahverengi kemer")]
+    assert polish_seller_message("Hakiki deri kahverengi kemer, 300 TL.", kemer) == "Hakiki deri kahverengi kemer, 300 TL."
+    cuzdan = [_item(title="Derimod hakiki deri kadın cüzdan")]
+    assert polish_seller_message("Cüzdanımızın fiyatı 2.144 TL.", cuzdan) == "Cüzdanımın fiyatı 2.144 TL."
+    etek = [_item(title="Stradivarius siyah pileli etek")]
+    assert polish_seller_message("Etekim güzel.", etek) == "Eteğim güzel."
+
+
+def test_evet_and_capital_i_handled():
+    from core.seller import strip_greeting
+    from buyer.llm import buyer_message_problem
+    assert strip_greeting("Evet, 1.469 TL olur.", 4) == "1.469 TL olur."
+    assert buyer_message_problem("İlanımdaki ürün için {FIYAT} öneriyorum.", ["Saten şal"], 2, []) == "bakis_acisi"
+    assert buyer_message_problem("İlanınızdaki ürün için {FIYAT} öneriyorum.", ["Saten şal"], 2, []) is None
+
+
+def test_same_opening_allowed_twice_flagged_third_time():
+    from core.seller import seller_message_problem
+    from schemas import Offer
+    b = [_item(title="The North Face siyah polar", condition="az kullanılmış")]
+    prev = [Offer(sender="seller", round=r, action="counter", listing_ids=["X"], price=1600.0, message=m)
+            for r, m in [(1, "The North Face siyah polar kalın ve sıcak tutar. 1.600 TL."),
+                         (2, "The North Face siyah polar için aynı gün kargo yaparım, 1.597 TL.")]]
+    new = "The North Face siyah polar ilandaki gibi az kullanılmış; 1.576 TL olur."
+    assert seller_message_problem(new, b, prev[:1], 2, "counter", 1576.0) is None
+    assert seller_message_problem(new, b, prev, 3, "counter", 1576.0) == "tekrar"
+
+
+def test_buyer_repeat_check_ignores_placeholder():
+    from buyer.llm import buyer_message_problem
+    from schemas import Offer
+    prev = Offer(sender="buyer", round=1, action="offer", listing_ids=["X"], price=1625.83,
+                 message="1.625,83 TL olursa hemen alırım.")
+    assert buyer_message_problem("{FIYAT} olursa alırım.", ["Kanken"], 2, [prev]) == "tekrar"

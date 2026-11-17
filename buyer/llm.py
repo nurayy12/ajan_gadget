@@ -67,11 +67,14 @@ def buyer_message_problem(message: str, titles: list[str], round_no: int, histor
     text = message.strip()
     if not text:
         return "bos"
-    low = text.lower()
+    # Türkçe küçük harf (İ -> i, I -> ı); yer tutucu önce çıkarılır, yoksa "{FIYAT}" -> "{fıyat}" olur.
+    low = text.replace(PLACEHOLDER, " ").replace("İ", "i").replace("I", "ı").lower()
     if _COMPANY_NAMES.search(low):
         return "firma"
     if "bütçe" in low:
         return "butce"
+    if re.search(r"\bilan(lar)?ım", low):  # "ilanımdaki ürün": ilan satıcının
+        return "bakis_acisi"
     for stem in _product_stems(titles) | {"ürün", "ürünler"}:
         if re.search(rf"\b{re.escape(stem)}(ler)?[ıiuü]?m(\b|[ıiuüae])", low):
             return "bakis_acisi"
@@ -186,7 +189,7 @@ def template_message(is_bundle: bool, round_no: int, tactic: str | None = None,
 
 # İlk turdan sonra mesajın başındaki selamı siler: LLM her çağrıda konuşmaya yeni başlıyormuş gibi
 # "Merhaba" yazabiliyor; gerçek bir sohbette selam yalnızca bir kez verilir.
-_GREETING = re.compile(r"^\s*(merhaba(lar)?|selam(lar)?|iyi günler|iyi akşamlar)\s*[,!.]*\s*", re.IGNORECASE)
+_GREETING = re.compile(r"^\s*(merhaba(lar)?|selam(lar)?|iyi günler|iyi akşamlar|evet)\s*[,!.]*\s*", re.IGNORECASE)
 
 
 def strip_meta_lines(message: str) -> str:

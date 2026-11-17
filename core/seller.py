@@ -137,8 +137,8 @@ SELLER_TACTICS: dict[str, dict] = {
     "cazip_anlat": {
         "aciklama": "Ürünü daha çekici anlat: az kullanıldığını, temizliğini, yenisine göre avantajını vurgula.",
         "sablonlar": [
-            "{Urun} {durum}, yenisine göre gerçekten avantajlı. {fiyat} yapabilirim.",
-            "{Urun} hâlâ çok güzel duruyor; {fiyat} hakkını veren bir fiyat.",
+            "Yenisine göre gerçekten avantajlı, ürün {durum}. {fiyat} yapabilirim.",
+            "Hâlâ çok güzel duruyor; {fiyat} hakkını veren bir fiyat.",
         ],
     },
     "kaygi_gider": {
@@ -325,7 +325,7 @@ def _build_seller_prompt(
 
 # İlk turdan sonra mesajın başındaki selamı siler: LLM her çağrıda konuşmaya yeni başlıyormuş gibi
 # "Merhaba" yazabiliyor; gerçek bir sohbette selam yalnızca bir kez verilir.
-_GREETING = re.compile(r"^\s*(merhaba(lar)?|selam(lar)?|iyi günler|iyi akşamlar)\s*[,!.]*\s*", re.IGNORECASE)
+_GREETING = re.compile(r"^\s*(merhaba(lar)?|selam(lar)?|iyi günler|iyi akşamlar|evet)\s*[,!.]*\s*", re.IGNORECASE)
 
 
 _COMPANY_NAMES = re.compile(
@@ -358,7 +358,8 @@ def _product_stems(bundle: list[Listing]) -> set[str]:
 
 
 def _numbers_removed(text: str) -> str:
-    return " ".join(re.sub(r"[\d.,]+\s*(tl)?", " ", text.lower()).split())
+    low = text.replace("İ", "i").replace("I", "ı").lower()
+    return " ".join(re.sub(r"[\d.,]+\s*(tl)?", " ", low).split())
 
 
 # Mesajda iddia edilen durum ifadesi -> bu iddiayı destekleyen ilan durumları.
@@ -377,12 +378,21 @@ _FINAL_PHRASES = re.compile(r"son (teklif|fiyat)|düşürmem mümkün değil|dah
 _TL_AMOUNT = re.compile(r"(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:,\d{1,2})?)\s*(?:tl|₺|lira)", re.IGNORECASE)
 
 
-def _soft_variants(stem: str) -> set[str]:
-    """Ünlüyle başlayan ek alınca yumuşayan kök biçimi de ekler (gömlek -> gömleğ, etek -> eteğ)."""
+def _soft_variants(stem: str, title_words: set[str] | None = None) -> set[str]:
+    """Ünlüyle başlayan ek alınca yumuşayan kök biçimi de ekler (gömlek -> gömleğ, etek -> eteğ).
+
+    Yalnızca ürün adında k ile biten kelimenin kendisi için geçerlidir; ek atılarak elde edilen
+    kökler ("hakiki" -> "hakik") yumuşatılmaz ("hakiği" hatası).
+    """
     variants = {stem}
-    if stem.endswith("k") and len(re.findall(r"[aeıioöuü]", stem)) >= 2:
+    if (stem.endswith("k") and len(re.findall(r"[aeıioöuü]", stem)) >= 2
+            and (title_words is None or stem in title_words)):
         variants.add(stem[:-1] + "ğ")
     return variants
+
+
+def _title_words(bundle: list[Listing]) -> set[str]:
+    return {w for item in bundle for w in re.findall(r"[a-zçğıöşü]+", item.title.lower())}
 
 
 def _allowed_conditions(bundle: list[Listing]) -> set[str]:
@@ -408,7 +418,7 @@ def seller_message_problem(message: str, bundle: list[Listing], history: list[Of
     text = message.strip()
     if not text:
         return "bos"
-    low = text.lower()
+    low = text.replace("İ", "i").replace("I", "ı").lower()  # Türkçe küçük harf (İ -> i, I -> ı)
     if _COMPANY_NAMES.search(low):
         return "firma"
     conditions = _allowed_conditions(bundle)
@@ -426,8 +436,9 @@ def seller_message_problem(message: str, bundle: list[Listing], history: list[Of
                 value = float(raw.replace(".", "").replace(",", "."))
                 if abs(value - price) > 1.0:
                     return "baska_fiyat"
+        words = _title_words(bundle)
         for stem in _product_stems(bundle):
-            for variant in _soft_variants(stem):
+            for variant in _soft_variants(stem, words):
                 if re.search(rf"\b{re.escape(variant)}\w*?({'|'.join(_SECOND_PERSON)})\w*", low):
                     return "bakis_acisi"
         if round < T_MAX and _FINAL_PHRASES.search(low):
@@ -437,7 +448,8 @@ def seller_message_problem(message: str, bundle: list[Listing], history: list[Of
         if difflib.SequenceMatcher(None, _numbers_removed(previous[-1]), _numbers_removed(text)).ratio() > 0.7:
             return "tekrar"
         opening = _numbers_removed(text).split()[:4]
-        if len(opening) == 4 and any(_numbers_removed(p).split()[:4] == opening for p in previous):
+        same_opening = sum(_numbers_removed(p).split()[:4] == opening for p in previous)
+        if len(opening) == 4 and same_opening >= 2:
             return "tekrar"
     return None
 
@@ -450,12 +462,15 @@ def polish_seller_message(message: str, bundle: list[Listing] | None = None) -> 
     """
     for wrong, right in _GRAMMAR_FIXES:
         message = message.replace(wrong, right)
+    words = _title_words(bundle or [])
     for stem in _product_stems(bundle or []):
         # ünlüyle biten ad + "s" + ünlü + "m": ayakkabı-sı-m -> ayakkabı-m
         if stem[-1] in "aeıioöuü":
             message = re.sub(rf"\b({re.escape(stem)})s[ıiuü]m", r"\1m", message, flags=re.IGNORECASE)
+        # "biz" iyeliği: cüzdan-ımız -> cüzdan-ım, cüzdanımızın -> cüzdanımın
+        message = re.sub(rf"\b({re.escape(stem)}\w*?[ıiuü]?)m[ıiuü]z", r"\1m", message, flags=re.IGNORECASE)
         # k ile biten çok heceli ad + ünlüyle başlayan ek: etek-im -> eteğ-im
-        for soft in _soft_variants(stem) - {stem}:
+        for soft in _soft_variants(stem, words) - {stem}:
             message = re.sub(rf"\b{re.escape(stem)}([ıiuüae])",
                              lambda m, soft=soft: (soft[0].upper() if m.group(0)[0].isupper() else soft[0])
                              + soft[1:] + m.group(1), message, flags=re.IGNORECASE)
