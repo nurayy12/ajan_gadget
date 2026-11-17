@@ -130,6 +130,21 @@ def template_message(is_bundle: bool, round_no: int, tactic: str | None = None,
 _GREETING = re.compile(r"^\s*(merhaba(lar)?|selam(lar)?|iyi günler|iyi akşamlar)\s*[,!.]*\s*", re.IGNORECASE)
 
 
+def strip_meta_lines(message: str) -> str:
+    """LLM'in talimatı tekrar ettiği başlık satırlarını ve mesajı saran tırnakları siler.
+
+    Örnek: "Anlaşırsak hemen satın alacağını söyleyerek satıcıya yazacağın mesaj:\n<asıl mesaj>"
+    -> "<asıl mesaj>". İki noktayla biten ve ardından başka satır gelen satırlar başlık sayılır.
+    """
+    lines = [l.strip() for l in message.strip().splitlines() if l.strip()]
+    while len(lines) > 1 and lines[0].endswith(":"):
+        lines.pop(0)
+    text = " ".join(lines)
+    if len(text) > 1 and text[0] in "\"'“«" and text[-1] in "\"'”»":
+        text = text[1:-1].strip()
+    return text
+
+
 def strip_greeting(message: str, round_no: int) -> str:
     """2. turdan itibaren mesajın başındaki selamı kaldırır ve ilk harfi büyütür."""
     if round_no <= 1:
@@ -199,7 +214,7 @@ def _real_message(titles: list[str], is_bundle: bool, round_no: int, history: li
     # yalnızca metin bloklarını birleştir.
     text = "".join(getattr(b, "text", "") for b in response.content
                    if getattr(b, "type", "text") == "text").strip()
-    return strip_greeting(text, round_no)
+    return strip_greeting(strip_meta_lines(text), round_no)
 
 
 def write_message(titles: list[str], is_bundle: bool, round_no: int, history: list[Offer],

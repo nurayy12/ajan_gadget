@@ -137,3 +137,12 @@ def test_prompts_say_no_greeting_after_first_round():
     assert "selamla başlama" in _build_seller_prompt([item], [], 480.0, "counter", None, 3)
     assert "selamla başlayabilirsin" in _build_seller_prompt([item], [], 480.0, "counter", None, 1)
     assert "selamla başlama" in build_prompt(["Ceket"], False, 2, [])
+
+
+def test_buyer_drops_echoed_instruction_lines():
+    from buyer.llm import strip_meta_lines
+    raw = ("Anlaşırsak hemen satın alacağını söyleyerek satıcıya yazacağın mesaj:\n"
+           "{FIYAT} üzerinden anlaşırsak ödemeyi hemen yapar, satın alırım.")
+    assert strip_meta_lines(raw) == "{FIYAT} üzerinden anlaşırsak ödemeyi hemen yapar, satın alırım."
+    assert strip_meta_lines('"Merhaba, {FIYAT} olur mu?"') == "Merhaba, {FIYAT} olur mu?"
+    assert strip_meta_lines("Tek satır: {FIYAT} olur mu?") == "Tek satır: {FIYAT} olur mu?"
