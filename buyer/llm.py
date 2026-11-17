@@ -62,6 +62,7 @@ def buyer_message_problem(message: str, titles: list[str], round_no: int, histor
       bakis_acisi  alıcı satıcının ürününden "çantam", "ürünlerim" diye bahsediyor
       son_teklif   son tur değilken "son teklif"
       tekrar       bir önceki alıcı mesajıyla neredeyse aynı
+      meta         prompt'taki bilgi satırlarını tekrar ediyor ("Tek ürün olduğundan…")
     """
     text = message.strip()
     if not text:
@@ -76,6 +77,8 @@ def buyer_message_problem(message: str, titles: list[str], round_no: int, histor
             return "bakis_acisi"
     if not last_round and re.search(r"son teklif", low):
         return "son_teklif"
+    if re.search(r"tek ürün olduğu|ürün sayısı|toplu alım:|bu turda kullanacağın|gerekçe:", low):
+        return "meta"
     previous = [o.message for o in history if o.sender == "buyer"]
     if previous:
         norm = lambda t: " ".join(re.sub(r"[\d.,]+\s*(tl)?|\{fiyat\}", " ", t).split())
@@ -201,6 +204,16 @@ def strip_meta_lines(message: str) -> str:
     return text
 
 
+_BUYER_GRAMMAR_FIXES = [("bilir mı", "bilir mi"), ("olur mı", "olur mu"), ("eder mısınız", "eder misiniz")]
+
+
+def polish_buyer_message(message: str) -> str:
+    """Küçük modelin sık yaptığı ünlü uyumu hatalarını düzeltir ("kabul edilebilir mı" -> "mi")."""
+    for wrong, right in _BUYER_GRAMMAR_FIXES:
+        message = message.replace(wrong, right)
+    return message
+
+
 def strip_greeting(message: str, round_no: int) -> str:
     """2. turdan itibaren mesajın başındaki selamı kaldırır ve ilk harfi büyütür."""
     if round_no <= 1:
@@ -229,16 +242,19 @@ def build_prompt(titles: list[str], is_bundle: bool, round_no: int, history: lis
     else:
         items = ", ".join(titles)
     count = _NUMBER_WORDS.get(len(titles), "birkaç")
-    parts = [
-        f"Ürünler: {items}",
-        f"Ürün sayısı: {count}. "
-        + ("Toplu alım: birden çok ürün birlikte alınıyor." if is_bundle else "Tek ürün."),
+    parts = [f"Ürünler: {items}"]
+    if is_bundle:  # tek üründe bu satır yok: model "Tek ürün olduğundan…" diye prompt'u tekrar ediyordu
+        parts.append(f"Ürün sayısı: {count}. Toplu alım: birden çok ürün birlikte alınıyor.")
+    parts += [
         f"Tur: {round_no}" + (" (son tur)" if last_round else ""),
         ("Bu ilk mesajın; kısa bir selamla başlayabilirsin." if round_no <= 1 else
          "Selamlaşma ilk mesajda yapıldı; 'Merhaba' gibi bir selamla başlama, doğrudan konuya gir."),
     ]
     if tactic in TACTIC_GUIDE:
         desc, example = TACTIC_GUIDE[tactic]
+        if tactic == "acilis" and not is_bundle:  # tek üründe paket/tek kargo anlatımı yok
+            desc = "İlgini söyle, ürünün durumuna değin ve ilk teklifini ver."
+            example = "Merhaba, ilanınızdaki ürünü beğendim, durumu da güzel görünüyor. {FIYAT} teklif ediyorum, uygun olur mu?"
         parts.append(f"Bu turda kullanacağın gerekçe: {desc}")
         parts.append(f"Örnek cümle (aynen kopyalama, kendi sözcüklerinle yaz): {example}")
     parts.append("Satıcı son turda fiyatını düşürdü." if seller_dropped
@@ -271,7 +287,7 @@ def _real_message(titles: list[str], is_bundle: bool, round_no: int, history: li
         # yalnızca metin bloklarını birleştir.
         text = "".join(getattr(b, "text", "") for b in response.content
                        if getattr(b, "type", "text") == "text").strip()
-        text = strip_greeting(strip_meta_lines(text), round_no)
+        text = polish_buyer_message(strip_greeting(strip_meta_lines(text), round_no))
         problem = buyer_message_problem(text, titles, round_no, history, last_round)
         if problem is None:
             return text

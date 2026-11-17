@@ -113,7 +113,7 @@ def test_seller_prompt_tells_perspective():
     from schemas import Listing
     item = Listing(listing_id="X", seller_id="s", title="Ceket", description="Temiz.", category="erkek giyim",
                    size="M", condition="iyi", list_price=500.0, floor_price=400.0, shipping_cost=39.99)
-    assert "asla 'ürünleriniz'" in _build_seller_prompt([item], [], 480.0, "counter")
+    assert "Asla 'ürünleriniz'" in _build_seller_prompt([item], [], 480.0, "counter")
 
 
 def test_greeting_only_in_first_round():

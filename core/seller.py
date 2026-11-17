@@ -149,7 +149,8 @@ SELLER_TACTICS: dict[str, dict] = {
         ],
     },
     "yan_teklif": {
-        "aciklama": "Fiyat dışında bir kolaylık sun: aynı gün kargo, özenli paketleme; pakette hepsini tek kargoyla göndermek.",
+        "aciklama": "Fiyat dışında bir kolaylık sun: aynı gün kargo, özenli paketleme.",
+        "aciklama_paket": "Fiyat dışında bir kolaylık sun: ürünlerin hepsini tek kolide, tek kargoyla, özenle göndermek.",
         "sablonlar": [
             "{fiyat}'de anlaşırsak aynı gün özenle paketleyip kargoya veririm.",
             "{fiyat} olursa hemen hazırlarım, özenle paketleyip gönderirim.",
@@ -185,6 +186,7 @@ SELLER_TACTICS: dict[str, dict] = {
         "sablonlar": [
             "Anlaştık, {fiyat}! Özenle paketleyip en kısa sürede kargoya veriyorum.",
             "Harika, {fiyat}'de anlaştık. Siparişinizi hemen hazırlıyorum.",
+            "Tamamdır, {fiyat}'de anlaştık. Teşekkür ederim, en kısa sürede kargoda olur.",
         ],
     },
 }
@@ -238,6 +240,12 @@ def _fill_template(template: str, bundle: list[Listing], price_str: str) -> str:
                            fiyat=f"{price_str} TL")
 
 
+def _tactic_description(tactic: str, bundle: list[Listing]) -> str:
+    """Taktiğin LLM'e verilen açıklaması (pakete özel açıklama varsa pakette o)."""
+    spec = SELLER_TACTICS[tactic]
+    return spec.get("aciklama_paket", spec["aciklama"]) if len(bundle) > 1 else spec["aciklama"]
+
+
 def _tactic_templates(tactic: str, bundle: list[Listing]) -> list[str]:
     spec = SELLER_TACTICS[tactic]
     if len(bundle) > 1 and "sablonlar_paket" in spec:
@@ -285,7 +293,7 @@ def _build_seller_prompt(
     if tactic in SELLER_TACTICS:
         example = _fill_template(_tactic_templates(tactic, bundle)[0], bundle, price_str)
         strategy_text = (
-            f"\nBu turdaki stratejin: {SELLER_TACTICS[tactic]['aciklama']}\n"
+            f"\nBu turdaki stratejin: {_tactic_description(tactic, bundle)}\n"
             f"Örnek (aynısını yazma, kendi cümlelerinle yaz): {example}\n"
             "Uydurma bilgi verme; yalnızca ilandaki bilgileri kullan. En çok 2 kısa cümle yaz."
         )
@@ -293,14 +301,18 @@ def _build_seller_prompt(
         f"Sen Dolap tarzı ikinci el bir pazar yerinde tek başına satış yapan bir kişisin.\n"
         f"Kurallar:\n"
         f"- 'Ben' diye konuş, 'biz' deme. Alıcıya 'siz' diye hitap et.\n"
-        f"- Ürünler senin: onlardan 'ürünüm', 'çantam', 'ceketim' ya da ürün adıyla bahset; asla "
-        f"'ürünleriniz', 'çantanız', 'ceketiniz' gibi alıcıya aitmiş gibi konuşma.\n"
-        f"- Ürünün durumunu yalnızca parantezdeki durum ifadesiyle söyle; 'yeni gibi', 'hiç kullanılmamış' "
-        f"gibi farklı bir durum uydurma.\n"
+        f"- Ürünler senin. Onlardan ürün adıyla ya da 'ürün', 'ürünler' diye bahset; ürün adına iyelik eki "
+        f"ekleme ('ayakkabısım', 'etekim' yazma). Asla 'ürünleriniz', 'çantanız' gibi alıcıya aitmiş gibi konuşma.\n"
+        f"- Ürünün durumunu yalnızca parantezdeki durum ifadesiyle söyle; başka bir durum ('yeni gibi', "
+        f"'hiç kullanılmamış', 'az kullanılmış', 'tertemiz') uydurma.\n"
+        f"- Sen satıcısın: fiyatı sen belirlersin. 'Düşebilir miyiz?', 'indirebilir misiniz?' gibi alıcının "
+        f"soracağı soruları sorma.\n"
+        f"- Mesajda yalnızca bu turun fiyatını yaz; liste fiyatını ya da önceki fiyatları yazma.\n"
+        f"- Her mesaja ürün adıyla başlama; önceki mesajlarında söylediğin özellikleri tekrar etme.\n"
         f"- Başka bir site, uygulama ya da kargo firması adı yazma; kargo takibi, ödeme yöntemi gibi ayrıntı uydurma.\n"
         f"- Önceki mesajlarındaki cümleleri tekrar etme, yeni bir şey söyle.\n"
         + ("" if round is None else
-           f"- Bu {round}. tur (toplam {T_MAX}). 'Son teklif' ya da 'son fiyat' ifadesini "
+           f"- Bu {round}. tur (toplam {T_MAX}). 'Son teklif', 'son fiyat', 'daha fazla inemem' gibi ifadeleri "
            + ("bu turda kullanabilirsin.\n" if round >= T_MAX else "kullanma, pazarlık sürüyor.\n"))
         + ("" if round is None else
            "Bu senin ilk mesajın; kısa bir selamla başlayabilirsin.\n" if round <= 1 else
@@ -325,7 +337,10 @@ _SECOND_PERSON = ("nız", "niz", "nuz", "nüz")
 _GRAMMAR_FIXES = [("Siz için", "Sizin için"), ("siz için", "sizin için"), ("sizinlere", "size"),
                   ("Sizlerin", "Sizin"), ("sizlerin", "sizin"), ("ürünlerimizin", "ürünlerimin"),
                   ("ürünlerimizi", "ürünlerimi"), ("ürünlerimiz", "ürünlerim"), ("teklifimizi", "teklifimi"),
-                  ("teklifimiz", "teklifim"), ("rica ederiz", "rica ederim")]
+                  ("teklifimiz", "teklifim"), ("rica ederiz", "rica ederim"), ("düşebiliriz", "düşebilirim"),
+                  ("düşünebiliriz", "düşünebilirim"), ("indirebiliriz", "indirebilirim"),
+                  ("değerlendirebiliriz", "değerlendirebilirim"), ("uygün", "uygun"), ("bilir mı", "bilir mi"),
+                  ("çektğini", "çektiğini")]
 
 
 def _product_stems(bundle: list[Listing]) -> set[str]:
@@ -346,17 +361,49 @@ def _numbers_removed(text: str) -> str:
     return " ".join(re.sub(r"[\d.,]+\s*(tl)?", " ", text.lower()).split())
 
 
+# Mesajda iddia edilen durum ifadesi -> bu iddiayı destekleyen ilan durumları.
+_CONDITION_CLAIMS = {
+    "yeni etiketli": {"yeni etiketli"}, "etiketli": {"yeni etiketli"}, "hiç kullanılmamış": {"yeni etiketli"},
+    "sıfır": {"yeni etiketli"}, "yepyeni": {"yeni etiketli"},
+    "yeni gibi": {"yeni etiketli", "yeni gibi"},
+    "az kullanılmış": {"az kullanılmış", "yeni gibi"},
+    "tertemiz": {"yeni etiketli", "yeni gibi"}, "kusursuz": {"yeni etiketli", "yeni gibi"},
+}
+# Satıcının alıcı gibi konuştuğu kalıplar (fiyatı satıcı belirler, satıcı indirim istemez).
+_ROLE_CONFUSION = re.compile(
+    r"düşebilir miyiz|düşürebilir miyiz|düşürülebilir mi|indirebilir misiniz|indirim yapabilir misiniz|"
+    r"düşürebilir misiniz|yaklaşabilir miyiz|olur mu sizce\?.*teklifiniz")
+_FINAL_PHRASES = re.compile(r"son (teklif|fiyat)|düşürmem mümkün değil|daha (fazla|da) inemem|inemiyorum")
+_TL_AMOUNT = re.compile(r"(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:,\d{1,2})?)\s*(?:tl|₺|lira)", re.IGNORECASE)
+
+
+def _soft_variants(stem: str) -> set[str]:
+    """Ünlüyle başlayan ek alınca yumuşayan kök biçimi de ekler (gömlek -> gömleğ, etek -> eteğ)."""
+    variants = {stem}
+    if stem.endswith("k") and len(re.findall(r"[aeıioöuü]", stem)) >= 2:
+        variants.add(stem[:-1] + "ğ")
+    return variants
+
+
+def _allowed_conditions(bundle: list[Listing]) -> set[str]:
+    return {item.condition.lower() for item in bundle}
+
+
 def seller_message_problem(message: str, bundle: list[Listing], history: list[Offer],
-                           round: int, action: str) -> str | None:
+                           round: int, action: str, price: float | None = None) -> str | None:
     """Satıcı mesajında demo kalitesini bozan sorun varsa adını döndürür, yoksa None.
 
     Kural katmanının (core/rules.py) kapsamadığı dil sorunları içindir:
       bos          boş mesaj (ör. düşünme özellikli model metin üretemedi)
       firma        başka site, uygulama ya da kargo firması adı
-      durum        ürünün durumu "yeni" değilken "yeni gibi" vb. iddia
-      bakis_acisi  satıcı kendi ürününden "çantanız", "ceketiniz" diye bahsediyor (kabulde serbest)
-      son_teklif   son tur değilken "son teklif / son fiyat"
-      tekrar       bir önceki satıcı mesajıyla neredeyse aynı
+      durum        ilandaki durumla çelişen durum iddiası ("iyi" ürüne "az kullanılmış", "yeni gibi" vb.;
+                   iddia ilan açıklamasında geçiyorsa serbest)
+      hepsi        tek ürün pazarlığında "hepsini / hepsi"
+      rol          satıcının alıcı gibi indirim istemesi ("düşebilir miyiz?")
+      baska_fiyat  mesajda bu turun fiyatından başka bir TL tutarı (price verilmişse)
+      bakis_acisi  satıcı kendi ürününden "çantanız", "gömleğiniz" diye bahsediyor (kabulde serbest)
+      son_teklif   son tur değilken "son teklif / son fiyat / inemem"
+      tekrar       bir önceki satıcı mesajıyla neredeyse aynı ya da önceki bir mesajla aynı açılış
     """
     text = message.strip()
     if not text:
@@ -364,26 +411,54 @@ def seller_message_problem(message: str, bundle: list[Listing], history: list[Of
     low = text.lower()
     if _COMPANY_NAMES.search(low):
         return "firma"
-    if any(claim in low for claim in _NEW_CONDITION_CLAIMS) and \
-            not any("yeni" in item.condition.lower() for item in bundle):
-        return "durum"
+    conditions = _allowed_conditions(bundle)
+    descriptions = " ".join(f"{item.title} {item.description}" for item in bundle).lower()
+    for claim, supported_by in _CONDITION_CLAIMS.items():
+        if re.search(rf"\b{claim}", low) and not (conditions & supported_by) and claim not in descriptions:
+            return "durum"
+    if len(bundle) == 1 and re.search(r"\bhepsi", low):
+        return "hepsi"
     if action != "accept":
+        if _ROLE_CONFUSION.search(low):
+            return "rol"
+        if price is not None:
+            for raw in _TL_AMOUNT.findall(text):
+                value = float(raw.replace(".", "").replace(",", "."))
+                if abs(value - price) > 1.0:
+                    return "baska_fiyat"
         for stem in _product_stems(bundle):
-            if re.search(rf"\b{re.escape(stem)}\w*?({'|'.join(_SECOND_PERSON)})\w*", low):
-                return "bakis_acisi"
-        if round < T_MAX and re.search(r"son (teklif|fiyat)", low):
+            for variant in _soft_variants(stem):
+                if re.search(rf"\b{re.escape(variant)}\w*?({'|'.join(_SECOND_PERSON)})\w*", low):
+                    return "bakis_acisi"
+        if round < T_MAX and _FINAL_PHRASES.search(low):
             return "son_teklif"
     previous = [o.message for o in history if o.sender == "seller"]
-    if previous and difflib.SequenceMatcher(None, _numbers_removed(previous[-1]),
-                                            _numbers_removed(text)).ratio() > 0.7:
-        return "tekrar"
+    if previous:
+        if difflib.SequenceMatcher(None, _numbers_removed(previous[-1]), _numbers_removed(text)).ratio() > 0.7:
+            return "tekrar"
+        opening = _numbers_removed(text).split()[:4]
+        if len(opening) == 4 and any(_numbers_removed(p).split()[:4] == opening for p in previous):
+            return "tekrar"
     return None
 
 
-def polish_seller_message(message: str) -> str:
-    """Küçük modelin sık yaptığı dil hatalarını düzeltir ("Siz için" -> "Sizin için", "biz" -> "ben")."""
+def polish_seller_message(message: str, bundle: list[Listing] | None = None) -> str:
+    """Küçük modelin sık yaptığı dil hatalarını düzeltir.
+
+    "Siz için" -> "Sizin için", "biz" kipi -> "ben", "uygün" -> "uygun"; ürün adlarına yanlış
+    eklenen iyelik ("ayakkabısım" -> "ayakkabım", "çantasım" -> "çantam", "etekim" -> "eteğim").
+    """
     for wrong, right in _GRAMMAR_FIXES:
         message = message.replace(wrong, right)
+    for stem in _product_stems(bundle or []):
+        # ünlüyle biten ad + "s" + ünlü + "m": ayakkabı-sı-m -> ayakkabı-m
+        if stem[-1] in "aeıioöuü":
+            message = re.sub(rf"\b({re.escape(stem)})s[ıiuü]m", r"\1m", message, flags=re.IGNORECASE)
+        # k ile biten çok heceli ad + ünlüyle başlayan ek: etek-im -> eteğ-im
+        for soft in _soft_variants(stem) - {stem}:
+            message = re.sub(rf"\b{re.escape(stem)}([ıiuüae])",
+                             lambda m, soft=soft: (soft[0].upper() if m.group(0)[0].isupper() else soft[0])
+                             + soft[1:] + m.group(1), message, flags=re.IGNORECASE)
     return message
 
 
@@ -457,7 +532,9 @@ def generate_seller_message(
         round = sum(1 for o in history if o.sender == "seller") + 1
     tactic = choose_seller_tactic(bundle, history, round, action)
 
-    if use_mock:
+    # Kabul mesajı her zaman şablondur: küçük model kapanışta kargo takibi, ödeme adımı gibi
+    # ayrıntılar uyduruyordu; kapanışın bilgi taşıması gerekmiyor.
+    if use_mock or action == "accept":
         return _template_seller_message(price_str, action, tactic, bundle, round)
 
     prompt = _build_seller_prompt(bundle, history, target_price, action, tactic, round)
@@ -479,8 +556,8 @@ def generate_seller_message(
             # yalnızca metin bloklarını birleştir.
             text = "".join(getattr(b, "text", "") for b in response.content
                            if getattr(b, "type", "text") == "text").strip()
-            text = polish_seller_message(strip_greeting(_fix_seller_perspective(text, action), round))
-            problem = seller_message_problem(text, bundle, history, round, action)
+            text = polish_seller_message(strip_greeting(_fix_seller_perspective(text, action), round), bundle)
+            problem = seller_message_problem(text, bundle, history, round, action, target_price)
             if problem is None:
                 return text
             SELLER_QUALITY_FALLBACKS[problem] = SELLER_QUALITY_FALLBACKS.get(problem, 0) + 1

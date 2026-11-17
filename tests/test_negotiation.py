@@ -341,11 +341,21 @@ def test_llm_retry_and_fallback_records_llm_error(monkeypatch: pytest.MonkeyPatc
         budget=2000.0,
         target_listing_id="B1",
     )
+    # 1. turda düşük teklif: satıcı karşı teklif yazmak için LLM'i çağırır (hata alır).
+    # Kabul mesajı artık her zaman şablon olduğu için LLM hatası karşı teklifte ölçülür.
     scripted = [
         Offer(
             sender="buyer",
             round=1,
             action="offer",
+            listing_ids=["B1"],
+            price=600.0,
+            message="Ceket için 600 TL veririm.",
+        ),
+        Offer(
+            sender="buyer",
+            round=2,
+            action="counter",
             listing_ids=["B1"],
             price=1000.0,
             message="Ceket için 1000 TL veririm.",

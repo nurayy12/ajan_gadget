@@ -48,7 +48,8 @@ def audit_offer(offer, scenario, bundle, history, n_items) -> list[str]:
     """Tek bir gönderilmiş mesajın sorunları."""
     issues = list(check(offer, scenario, bundle, history))
     if offer.sender == "seller":
-        p = seller_mod.seller_message_problem(offer.message, bundle, history, offer.round, offer.action)
+        p = seller_mod.seller_message_problem(offer.message, bundle, history, offer.round, offer.action,
+                                              offer.price)
     else:
         p = buyer_llm.buyer_message_problem(offer.message, [l.title for l in bundle], offer.round, history,
                                             last_round=offer.round >= 5)
