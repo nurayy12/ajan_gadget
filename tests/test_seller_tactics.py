@@ -95,3 +95,45 @@ def test_placeholder_leak_rule():
                     message="Bu fiyat biraz yüksek, 700 TL olur mu?")
     assert "placeholder_leak" in check(leak, scenario, SINGLE, [])
     assert "placeholder_leak" not in check(natural, scenario, SINGLE, [])
+
+
+def test_seller_does_not_call_own_products_yours():
+    from core.seller import _fix_seller_perspective
+    msg = "Merhaba, ürünleriniz gerçekten çok güzel. Ürününüzün durumu iyi, 2.472 TL olur."
+    fixed = _fix_seller_perspective(msg, "counter")
+    assert "ürünleriniz" not in fixed.lower() and "ürününüz" not in fixed.lower()
+    assert fixed == "Merhaba, ürünlerim gerçekten çok güzel. Ürünümün durumu iyi, 2.472 TL olur."
+    # Kabulde "ürünlerinizi kargoya veririm" doğru kullanım, dokunulmaz.
+    ok = "Anlaştık, ürünlerinizi yarın kargoya veririm."
+    assert _fix_seller_perspective(ok, "accept") == ok
+
+
+def test_seller_prompt_tells_perspective():
+    from core.seller import _build_seller_prompt
+    from schemas import Listing
+    item = Listing(listing_id="X", seller_id="s", title="Ceket", description="Temiz.", category="erkek giyim",
+                   size="M", condition="iyi", list_price=500.0, floor_price=400.0, shipping_cost=39.99)
+    assert "asla 'ürünleriniz'" in _build_seller_prompt([item], [], 480.0, "counter")
+
+
+def test_greeting_only_in_first_round():
+    from core.seller import strip_greeting
+    from buyer.llm import strip_greeting as buyer_strip
+    for fn in (strip_greeting, buyer_strip):
+        assert fn("Merhaba, 2.472 TL olur.", 1) == "Merhaba, 2.472 TL olur."
+        assert fn("Merhaba, ürünler çok temiz. 2.472 TL olur.", 3) == "Ürünler çok temiz. 2.472 TL olur."
+        assert fn("Merhaba! biraz daha esneyebilirim.", 2) == "Biraz daha esneyebilirim."
+        assert fn("Selamlar, {FIYAT} olur mu?", 2) == "{FIYAT} olur mu?"
+        assert fn("Merhabalar", 2) == "Merhabalar"          # yalnızca selamsa dokunma
+        assert fn("Ürün güzel, merhaba diyeyim.", 2) == "Ürün güzel, merhaba diyeyim."
+
+
+def test_prompts_say_no_greeting_after_first_round():
+    from core.seller import _build_seller_prompt
+    from buyer.llm import build_prompt
+    from schemas import Listing
+    item = Listing(listing_id="X", seller_id="s", title="Ceket", description="Temiz.", category="erkek giyim",
+                   size="M", condition="iyi", list_price=500.0, floor_price=400.0, shipping_cost=39.99)
+    assert "selamla başlama" in _build_seller_prompt([item], [], 480.0, "counter", None, 3)
+    assert "selamla başlayabilirsin" in _build_seller_prompt([item], [], 480.0, "counter", None, 1)
+    assert "selamla başlama" in build_prompt(["Ceket"], False, 2, [])

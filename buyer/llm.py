@@ -8,6 +8,7 @@ Model adı MODEL_NAME ortam değişkeninden okunur (varsayılan claude-haiku-5-5
 API anahtarı .env dosyasındaki ANTHROPIC_API_KEY'den gelir.
 """
 import os
+import re
 import random
 import warnings
 
@@ -124,6 +125,21 @@ def template_message(is_bundle: bool, round_no: int, tactic: str | None = None,
     return "Teşekkürler. {FIYAT} fiyatına yaklaşabilirsek hemen anlaşabiliriz."
 
 
+# İlk turdan sonra mesajın başındaki selamı siler: LLM her çağrıda konuşmaya yeni başlıyormuş gibi
+# "Merhaba" yazabiliyor; gerçek bir sohbette selam yalnızca bir kez verilir.
+_GREETING = re.compile(r"^\s*(merhaba(lar)?|selam(lar)?|iyi günler|iyi akşamlar)\s*[,!.]*\s*", re.IGNORECASE)
+
+
+def strip_greeting(message: str, round_no: int) -> str:
+    """2. turdan itibaren mesajın başındaki selamı kaldırır ve ilk harfi büyütür."""
+    if round_no <= 1:
+        return message
+    rest = _GREETING.sub("", message, count=1)
+    if not rest or rest == message:
+        return message
+    return rest[0].upper() + rest[1:]
+
+
 _NUMBER_WORDS = {1: "bir", 2: "iki", 3: "üç", 4: "dört", 5: "beş", 6: "altı", 7: "yedi",
                  8: "sekiz", 9: "dokuz", 10: "on"}
 
@@ -147,6 +163,8 @@ def build_prompt(titles: list[str], is_bundle: bool, round_no: int, history: lis
         f"Ürün sayısı: {count}. "
         + ("Toplu alım: birden çok ürün birlikte alınıyor." if is_bundle else "Tek ürün."),
         f"Tur: {round_no}" + (" (son tur)" if last_round else ""),
+        ("Bu ilk mesajın; kısa bir selamla başlayabilirsin." if round_no <= 1 else
+         "Selamlaşma ilk mesajda yapıldı; 'Merhaba' gibi bir selamla başlama, doğrudan konuya gir."),
     ]
     if tactic in TACTIC_GUIDE:
         desc, example = TACTIC_GUIDE[tactic]
@@ -179,8 +197,9 @@ def _real_message(titles: list[str], is_bundle: bool, round_no: int, history: li
     )
     # Düşünme (thinking) özellikli modeller (ör. gemma4) önce bir düşünme bloğu döndürebilir;
     # yalnızca metin bloklarını birleştir.
-    return "".join(getattr(b, "text", "") for b in response.content
+    text = "".join(getattr(b, "text", "") for b in response.content
                    if getattr(b, "type", "text") == "text").strip()
+    return strip_greeting(text, round_no)
 
 
 def write_message(titles: list[str], is_bundle: bool, round_no: int, history: list[Offer],

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import time
 from dotenv import load_dotenv
 from schemas import Listing, Offer
@@ -249,6 +250,7 @@ def _build_seller_prompt(
     target_price: float,
     action: str,
     tactic: str | None = None,
+    round: int | None = None,
 ) -> str:
     """
     LLM için satıcı istemini (prompt) oluşturur.
@@ -288,10 +290,49 @@ def _build_seller_prompt(
         )
     return (
         f"Sen Dolap tarzı ikinci el bir pazar yerinde satıcısın.\n"
-        f"Satılan ürün(ler): {items_desc}\n"
+        f"Ürünler senin; onlardan 'ürünlerim', 'ürün' ya da 'ürünler' diye bahset, asla 'ürünleriniz' ya da "
+        f"'ürününüz' deme. Alıcıya 'siz' diye hitap et.\n"
+        + ("" if round is None else
+           "Bu senin ilk mesajın; kısa bir selamla başlayabilirsin.\n" if round <= 1 else
+           "Selamlaşma ilk mesajda yapıldı; 'Merhaba' gibi bir selamla başlama, doğrudan konuya gir.\n")
+        + f"Satılan ürün(ler): {items_desc}\n"
         f"Geçmiş konuşma:\n{history_text}\n\n"
         f"Görev: {instruction}{strategy_text}"
     )
+
+
+# İlk turdan sonra mesajın başındaki selamı siler: LLM her çağrıda konuşmaya yeni başlıyormuş gibi
+# "Merhaba" yazabiliyor; gerçek bir sohbette selam yalnızca bir kez verilir.
+_GREETING = re.compile(r"^\s*(merhaba(lar)?|selam(lar)?|iyi günler|iyi akşamlar)\s*[,!.]*\s*", re.IGNORECASE)
+
+
+def strip_greeting(message: str, round_no: int) -> str:
+    """2. turdan itibaren mesajın başındaki selamı kaldırır ve ilk harfi büyütür."""
+    if round_no <= 1:
+        return message
+    rest = _GREETING.sub("", message, count=1)
+    if not rest or rest == message:
+        return message
+    return rest[0].upper() + rest[1:]
+
+
+# Satıcı kendi ürününden ikinci çoğul iyelikle ("ürünleriniz") söz ederse birinci tekile çevrilir.
+# Kabul mesajında "ürünlerinizi kargoya veririm" doğru kullanım olduğu için orada uygulanmaz.
+_SELLER_PERSPECTIVE_FIXES = [
+    ("ürünlerinizin", "ürünlerimin"), ("ürünlerinizi", "ürünlerimi"), ("ürünleriniz", "ürünlerim"),
+    ("ürününüzün", "ürünümün"), ("ürününüzü", "ürünümü"), ("ürününüz", "ürünüm"),
+]
+
+
+def _fix_seller_perspective(message: str, action: str) -> str:
+    """Pazarlık mesajında satıcının kendi ürününe "ürünleriniz" demesini düzeltir (ilk harf korunur)."""
+    if action == "accept":
+        return message
+    for wrong, right in _SELLER_PERSPECTIVE_FIXES:
+        for w, r in ((wrong, right), (wrong.capitalize(), right.capitalize()),
+                     ("Ü" + wrong[1:], "Ü" + right[1:])):
+            message = message.replace(w, r)
+    return message
 
 
 def _template_seller_message(price_str: str, action: str, tactic: str | None = None,
@@ -335,7 +376,7 @@ def generate_seller_message(
     if use_mock:
         return _template_seller_message(price_str, action, tactic, bundle, round)
 
-    prompt = _build_seller_prompt(bundle, history, target_price, action, tactic)
+    prompt = _build_seller_prompt(bundle, history, target_price, action, tactic, round)
     model_name = os.getenv("MODEL_NAME", DEFAULT_MODEL_NAME)
     api_key = os.getenv("ANTHROPIC_API_KEY")
 
@@ -352,8 +393,9 @@ def generate_seller_message(
             )
             # Düşünme (thinking) özellikli modeller (ör. gemma4) önce bir düşünme bloğu döndürebilir;
             # yalnızca metin bloklarını birleştir.
-            return "".join(getattr(b, "text", "") for b in response.content
+            text = "".join(getattr(b, "text", "") for b in response.content
                            if getattr(b, "type", "text") == "text").strip()
+            return strip_greeting(_fix_seller_perspective(text, action), round)
         except Exception:
             if attempt < LLM_MAX_RETRIES - 1:
                 time.sleep(LLM_BACKOFF_BASE * (2 ** attempt))

@@ -370,7 +370,7 @@ def render_chat(offers: list[Offer], animate: bool = False) -> None:
     for o in offers:
         shown += bubble_html(o)
         slot.markdown(f'<div class="chat">{shown}</div>', unsafe_allow_html=True)
-        time.sleep(0.45)
+        time.sleep(0.15)
 
 
 def receipt_html(offer: dict) -> str:
