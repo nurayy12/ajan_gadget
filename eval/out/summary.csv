@@ -1,0 +1,5 @@
+Sistem,Mod,Çalıştırma,Senaryo,Anlaşma oranı (%),Ort. indirim (%),Ort. alıcı faydası,Ort. satıcı kazancı (TL),Ort. satıcı faydası,AgenticPay alıcı skoru,AgenticPay satıcı skoru,AgenticPay genel skor,Ort. tur,Kayıtlı ihlal oranı (%),Ulaşan ihlal oranı (%),Aralık dışı anlaşma,LLM hatalı çalıştırma,ZOPA'sız çalıştırma,Ort. kargo tasarrufu (TL)
+Asıl sistem,Tek ürün,120,40,92.5,8.518,0.298,160.456,0.702,54.674,74.535,80.746,4.675,22.5,0.0,0,0,3,0.0
+Asıl sistem,Paket,120,40,92.5,9.287,0.288,442.333,0.712,54.34,75.15,80.026,4.475,10.833,0.0,0,0,3,23.777
+Yalnızca LLM,Tek ürün,120,40,4.167,15.721,0.682,30.6,0.318,2.743,1.939,2.465,4.992,50.833,50.833,0,0,3,0.0
+Yalnızca LLM,Paket,120,40,14.167,16.965,0.9,145.729,0.1,8.644,4.362,4.68,4.833,75.833,75.833,5,0,3,31.168

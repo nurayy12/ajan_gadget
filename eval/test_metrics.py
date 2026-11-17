@@ -108,9 +108,22 @@ def test_paired_test_uses_only_bundled_scenarios_with_two_deals(df):
 def test_violation_comparison_in_bundle_mode(df):
     # Paket modu: asıl sistem 0/2 ihlalli, yalnızca LLM 2/2 ihlalli
     table = violation_comparison(df).set_index("Sistem")
-    assert table.loc["Asıl sistem", "İhlalli çalıştırma"] == 0
+    assert table.loc["Asıl sistem", "Kayıtlı ihlalli çalıştırma"] == 0
     assert table.loc["Yalnızca LLM", "Çalıştırma (n)"] == 2
-    assert table.loc["Yalnızca LLM", "İhlal oranı (%)"] == pytest.approx(100.0)
+    assert table.loc["Yalnızca LLM", "Kayıtlı ihlal oranı (%)"] == pytest.approx(100.0)
+
+
+def test_delivered_violations_recheck_sent_offers():
+    # Yakalanıp şablonla değiştirilen taslak kayıtlıdır ama gönderilen teklifte ihlal kalmaz.
+    from eval.metrics import delivered_violations
+    from schemas import Scenario
+    item = _listing("A", 1000)
+    scenario = Scenario(scenario_id="S", need_list=["a"], budget=2000.0, target_listing_id="A")
+    clean = {"sender": "seller", "round": 1, "action": "counter", "listing_ids": ["A"],
+             "price": 950.0, "message": "Merhaba, bu paket için yapabileceğim fiyat 950 TL."}
+    leaky = dict(clean, message="Ürün 950 TL, ama 1.234 TL de olurdu.")
+    assert delivered_violations([clean], scenario, {"A": item}) == []
+    assert delivered_violations([leaky], scenario, {"A": item}) == ["price_mismatch"]
 
 
 def test_seller_gain_and_utility(summary):

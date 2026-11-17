@@ -49,7 +49,10 @@ def _real_call(system: str, prompt: str) -> str:
         system=system,
         messages=[{"role": "user", "content": prompt}],
     )
-    return response.content[0].text.strip()
+    # Düşünme (thinking) özellikli modeller (ör. gemma4) önce bir düşünme bloğu döndürebilir;
+    # yalnızca metin bloklarını birleştir.
+    return "".join(getattr(b, "text", "") for b in response.content
+                   if getattr(b, "type", "text") == "text").strip()
 
 
 def _mock_reply(role: str, round_no: int, list_total: float, other_price: float | None) -> str:

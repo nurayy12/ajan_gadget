@@ -24,7 +24,9 @@ import pandas as pd
 from scipy.stats import wilcoxon
 
 from data.validate import load_listings, load_scenarios
+from core.rules import check
 from policy import bundle_floor, buyer_shipping, max_affordable_price
+from schemas import Offer
 
 ROOT = Path(__file__).parent.parent
 SYSTEMS = ["system", "llm_only"]
@@ -101,6 +103,10 @@ def load_results(results_path: str | Path, listings_path: str | Path,
       seller_gain               satıcının kendi alt sınırının üstündeki kazancı (TL) = fiyat - p_min
       seller_utility            satıcı faydası r_s (AgenticPay)                (geçerli anlaşmada)
       buyer_msgs, seller_msgs   tarafların mesaj metinleri (çeşitlilik ölçümü için)
+      has_violation             kayıtlı ihlal: denetimin yakaladığı her ihlal (asıl sistemde
+                                yakalanıp yeniden üretilen ya da şablonla değiştirilen taslaklar dahil)
+      delivered_violation       ulaşan ihlal: karşı tarafa giden son tekliflerde kalan ihlal
+                                (kayıtlı teklifler kural denetiminden yeniden geçirilir)
     """
     listings = {l.listing_id: l for l in load_listings(listings_path)}
     scenarios = {s.scenario_id: s for s in load_scenarios(scenarios_path)}
@@ -139,6 +145,7 @@ def load_results(results_path: str | Path, listings_path: str | Path,
                 utility = (p_max - price) / (p_max - p_min)
                 seller_utility = 1.0 - utility
         buyer_s, seller_s, global_s = agenticpay_scores(deal, price, p_min, p_max, res["rounds"])
+        delivered = delivered_violations(res["offers"], scenario, listings)
 
         rows.append({
             "scenario_id": scenario_id, "system": system, "mode": mode, "repeat": repeat,
@@ -153,8 +160,27 @@ def load_results(results_path: str | Path, listings_path: str | Path,
             "violations": res["violations"],
             "has_violation": any(v != LLM_ERROR for v in res["violations"]),
             "has_llm_error": LLM_ERROR in res["violations"],
+            "delivered": delivered,
+            "delivered_violation": bool(delivered),
         })
     return pd.DataFrame(rows)
+
+
+def delivered_violations(offers: list[dict], scenario, listings: dict) -> list[str]:
+    """Karşı tarafa giden (kayıtlı) tekliflerde kalan ihlaller.
+
+    Asıl sistemde motor, ihlalli taslağı yeniden ürettirir ya da şablonla değiştirir; kayıtlı
+    violations listesi bu yakalanmış taslakları da sayar. Burada yalnızca gerçekten gönderilen
+    teklifler aynı kural denetiminden (core.rules.check) geçirilir.
+    """
+    history: list[Offer] = []
+    found: list[str] = []
+    for raw in offers:
+        offer = Offer(**raw)
+        items = [listings[i] for i in offer.listing_ids if i in listings]
+        found.extend(check(offer, scenario, items, history))
+        history.append(offer)
+    return found
 
 
 def per_scenario(df: pd.DataFrame) -> pd.DataFrame:
@@ -197,7 +223,8 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
                 "AgenticPay satıcı skoru": g["seller_score"].mean(),
                 "AgenticPay genel skor": g["global_score"].mean(),
                 "Ort. tur": g["rounds"].mean(),
-                "İhlal oranı (%)": 100 * g["has_violation"].mean(),
+                "Kayıtlı ihlal oranı (%)": 100 * g["has_violation"].mean(),
+                "Ulaşan ihlal oranı (%)": 100 * g["delivered_violation"].mean(),
                 "Aralık dışı anlaşma": int(g["out_of_zone"].sum()),
                 "LLM hatalı çalıştırma": int(g["has_llm_error"].sum()),
                 "ZOPA'sız çalıştırma": int((~g["zopa"]).sum()),
@@ -245,14 +272,17 @@ def message_diversity(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def violation_counts(df: pd.DataFrame) -> pd.DataFrame:
-    """İhlal türüne göre sayım: satırlar ihlal türü, sütunlar dört koşul."""
+def violation_counts(df: pd.DataFrame, column: str = "violations") -> pd.DataFrame:
+    """İhlal türüne göre sayım: satırlar ihlal türü, sütunlar dört koşul.
+
+    column="violations" kayıtlı ihlalleri, column="delivered" karşı tarafa ulaşanları sayar.
+    """
     counts = {}
     for system in SYSTEMS:
         for mode in MODES:
             g = df[(df["system"] == system) & (df["mode"] == mode)]
             counts[f"{SYSTEM_LABELS[system]} / {MODE_LABELS[mode]}"] = Counter(
-                v for vs in g["violations"] for v in vs)
+                v for vs in g[column] for v in vs)
     table = pd.DataFrame(counts).fillna(0).astype(int)
     table.index.name = "İhlal türü"
     return table
@@ -298,8 +328,10 @@ def violation_comparison(df: pd.DataFrame) -> pd.DataFrame:
         if g.empty:
             continue
         rows.append({"Sistem": SYSTEM_LABELS[system], "Çalıştırma (n)": len(g),
-                     "İhlalli çalıştırma": int(g["has_violation"].sum()),
-                     "İhlal oranı (%)": 100 * g["has_violation"].mean()})
+                     "Kayıtlı ihlalli çalıştırma": int(g["has_violation"].sum()),
+                     "Kayıtlı ihlal oranı (%)": 100 * g["has_violation"].mean(),
+                     "Ulaşan ihlalli çalıştırma": int(g["delivered_violation"].sum()),
+                     "Ulaşan ihlal oranı (%)": 100 * g["delivered_violation"].mean()})
     return pd.DataFrame(rows)
 
 
@@ -393,15 +425,17 @@ def plot_paired(df: pd.DataFrame, out_path: str | Path) -> None:
 
 
 def plot_violation_rate(df: pd.DataFrame, out_path: str | Path) -> None:
-    """Grafik 3: sisteme göre ihlal oranı (en az bir ihlal içeren çalıştırmaların yüzdesi)."""
-    rates = {k: 100 * v for k, v in df.groupby(["system", "mode"])["has_violation"].mean().items()}
+    """Grafik 3: karşı tarafa ulaşan ihlal oranı (son tekliflerinde ihlal kalan çalıştırmalar)."""
+    rates = {k: 100 * v for k, v in df.groupby(["system", "mode"])["delivered_violation"].mean().items()}
+    caught = df[df["system"] == "system"]["has_violation"].mean() * 100 if len(df) else 0.0
 
     fig, ax = _new_axes((6.4, 4.4))
     _grouped_bars(ax, rates)
     ax.set_ylabel("İhlal oranı (%)")
     ax.set_ylim(0, max(10.0, max(rates.values(), default=0) * 1.2))
-    ax.set_title("Sisteme göre ihlal oranı", loc="left", color="#0b0b0b")
-    ax.text(0, -0.17, "En az bir kural ihlali içeren çalıştırmaların oranı.",
+    ax.set_title("Karşı tarafa ulaşan ihlal oranı", loc="left", color="#0b0b0b")
+    ax.text(0, -0.17, "Gönderilen tekliflerde en az bir kural ihlali kalan çalıştırmalar. Asıl sistemde "
+            "çalıştırmaların %" + f"{caught:.1f}".replace(".", ",") + "'inde\nihlalli taslak yakalanıp düzeltildi (kayıtlı ihlal).",
             transform=ax.transAxes, fontsize=8, color="#52514e")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
@@ -457,9 +491,11 @@ def save_summary(df: pd.DataFrame, out_dir: str | Path) -> None:
     else:
         test_line = (f"Wilcoxon işaretli sıralar testi (indirim, paket − tek ürün): "
                      f"n = {test['n']} senaryo, medyan fark = {100 * test['median_diff']:.2f} puan, "
-                     f"W = {test['statistic']:.1f}, p = {test['p_value']:.4f}")
+                     f"W = {test['statistic']:.1f}, "
+                     + ("p < 0.0001" if test["p_value"] < 1e-4 else f"p = {test['p_value']:.4f}"))
     repeats = int(df["repeat"].nunique()) if len(df) else 0
     violations = violation_counts(df)
+    delivered = violation_counts(df, "delivered")
     zopa = zopa_table(df)
     parts = ["# Deney özeti", "",
              f"Tekrar sayısı: {repeats}. Anlaşma alanı p_min = paket indirimli alt sınır, "
@@ -469,14 +505,20 @@ def save_summary(df: pd.DataFrame, out_dir: str | Path) -> None:
              "Senaryo başına tekrar ortalaması kullanıldı; yalnızca paket kurulan senaryolar.", "",
              "## Karşılaştırma 2: paket modunda ihlal oranı (test yapılmadı)", "",
              _to_markdown(violation_comparison(df)), "",
+             "Kayıtlı ihlal: kural denetiminin yakaladığı her ihlal. Asıl sistemde ihlalli taslak yeniden "
+             "ürettirilir ya da şablonla değiştirilir, bu yüzden kayıtlıdır ama karşı tarafa ulaşmaz. "
+             "Ulaşan ihlal: gönderilen tekliflerde kalan ihlal. Yalnızca LLM sisteminde ihlaller "
+             "engellenmediği için iki oran aynıdır.", "",
              "## Anlaşma alanı olmayan çalıştırmalar", "",
              _to_markdown(zopa) if not zopa.empty else "Tüm çalıştırmalarda anlaşma alanı var.", "",
              "## Mesaj çeşitliliği", "",
              _to_markdown(message_diversity(df)), "",
              "Benzersiz kalıp: sayılar yok sayıldığında farklı mesaj oranı. distinct-n: farklı n-gram / "
              "toplam n-gram (Li ve ark. 2016). Düşük değer, mesajların aynı kalıpla tekrarlandığını gösterir.", "",
-             "## İhlal türleri", "",
+             "## İhlal türleri (kayıtlı)", "",
              _to_markdown(violations.reset_index()) if not violations.empty else "İhlal yok.", "",
+             "## İhlal türleri (karşı tarafa ulaşan)", "",
+             _to_markdown(delivered.reset_index()) if not delivered.empty else "İhlal yok.", "",
              *sensitivity_section(out_dir / "sensitivity.csv")]
     (out_dir / "summary.md").write_text("\n".join(parts), encoding="utf-8")
 
