@@ -52,6 +52,7 @@ def _sanitize_offer_with_template(
     offer: Offer,
     scenario: Scenario,
     bundle: list[Listing],
+    history: list[Offer] | None = None,
 ) -> Offer:
     """
     İkinci denemede de kural ihlali devam ederse:
@@ -74,12 +75,18 @@ def _sanitize_offer_with_template(
     safe_round = min(max(1, offer.round), T_MAX)
     price_str = format_price_tr(safe_price)
 
-    if offer.action == "accept":
+    if offer.sender == "seller":
+        # Satıcının o turdaki stratejisine uygun, ürüne göre doldurulmuş şablon (tek üründe "paket" demez,
+        # 1. turdan sonra "Merhaba" ile başlamaz).
+        from .seller import _template_seller_message, choose_seller_tactic
+        tactic = choose_seller_tactic(bundle, history or [], safe_round, offer.action)
+        template_msg = _template_seller_message(price_str, offer.action, tactic, bundle, safe_round)
+    elif offer.action == "accept":
         template_msg = f"Teklifinizi kabul ediyorum, {price_str} TL üzerinden anlaşalım."
-    elif offer.sender == "buyer":
-        template_msg = f"Merhaba, bu ürünler için teklifim {price_str} TL."
     else:
-        template_msg = f"Merhaba, bu paket için yapabileceğim fiyat {price_str} TL."
+        what = "bu ürünler" if len(bundle) > 1 else "bu ürün"
+        template_msg = f"{what} için teklifim {price_str} TL."
+        template_msg = ("Merhaba, " + template_msg) if safe_round <= 1 else template_msg[0].upper() + template_msg[1:]
 
     return Offer(
         sender=offer.sender,
@@ -198,7 +205,7 @@ def run_negotiation(
             if b_violations_retry:
                 all_violations.extend(b_violations_retry)
                 b_turn_violations.extend(b_violations_retry)
-                b_offer = _sanitize_offer_with_template(b_offer_retry, scenario, bundle)
+                b_offer = _sanitize_offer_with_template(b_offer_retry, scenario, bundle, history)
             else:
                 b_offer = b_offer_retry
 
@@ -231,7 +238,7 @@ def run_negotiation(
             if s_violations_retry:
                 all_violations.extend(s_violations_retry)
                 s_turn_violations.extend(s_violations_retry)
-                s_offer = _sanitize_offer_with_template(s_offer_retry, scenario, bundle)
+                s_offer = _sanitize_offer_with_template(s_offer_retry, scenario, bundle, history)
             else:
                 s_offer = s_offer_retry
 

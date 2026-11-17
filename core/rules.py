@@ -102,10 +102,14 @@ def check(
     # - Mesajda offer.price (±1 TL) mutlaka geçmeli.
     # - Mesajda geçen diğer fiyat sayıları; teklif fiyatına (offer.price), herhangi bir ürünün
     #   liste fiyatına, liste toplamına ya da kargo tutarına (±1 TL) eşitse ihlal sayılmaz.
+    #   İlanın başlığında ya da açıklamasında geçen sayılar ("40 litre", "38 beden") ürün
+    #   bilgisidir, fiyat değildir; bunlar da ihlal sayılmaz.
+    listing_numbers = [n for item in bundle for n in extract_numbers(f"{item.title} {item.description}")]
     allowed_numbers = (
         [offer.price, list_total, pkg_ship, b_ship, SHIPPING_SHARED_BUYER]
         + [item.list_price for item in bundle]
         + [item.shipping_cost for item in bundle]
+        + listing_numbers
     )
     has_offer_price = any(_approx_equal(num, offer.price, tol=MISMATCH_TOLERANCE) for num in numbers_in_msg)
     has_unrecognized_price = any(

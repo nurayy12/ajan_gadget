@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import os
 import random
 import re
@@ -129,8 +130,8 @@ SELLER_TACTICS: dict[str, dict] = {
     "urun_tanit": {
         "aciklama": "Ürünü tanıt: markasını ve durumunu ilan açıklamasındaki bilgilerle anlat.",
         "sablonlar": [
-            "Merhaba, {urun} {durum} ve tertemiz. Bu hâliyle {fiyat} uygun bir fiyat.",
-            "Merhaba! {Urun} {durum}; fotoğraflarda gördüğünüz hâlinde. {fiyat}'ye verebilirim.",
+            "Merhaba, {urun} {durum}, ilanda gördüğünüz hâliyle. {fiyat} uygun bir fiyat.",
+            "Merhaba! {Urun} {durum}; fotoğraflardaki gibi. {fiyat}'ye verebilirim.",
         ],
     },
     "cazip_anlat": {
@@ -141,10 +142,10 @@ SELLER_TACTICS: dict[str, dict] = {
         ],
     },
     "kaygi_gider": {
-        "aciklama": "Alıcının olası kaygısını gider: orijinal, defosuz olduğunu, istenirse ek fotoğraf atabileceğini söyle.",
+        "aciklama": "Alıcının olası kaygısını gider: ürünün ilandaki durumunda olduğunu, istenirse ek fotoğraf atabileceğini söyle. İlanda yazmayan özellik (orijinal, defosuz vb.) iddia etme.",
         "sablonlar": [
-            "İçiniz rahat olsun, {urun} orijinal ve defosuz. {fiyat}'nin altına inmem zor.",
-            "Herhangi bir kusuru yok, isterseniz ek fotoğraf da gönderirim. {fiyat} olur.",
+            "İçiniz rahat olsun, {urun} ilanda yazdığı gibi {durum}. {fiyat}'nin altına inmem zor.",
+            "Aklınıza takılan bir şey varsa ek fotoğraf gönderebilirim. {fiyat} olur.",
         ],
     },
     "yan_teklif": {
@@ -231,9 +232,9 @@ def _condition_text(bundle: list[Listing]) -> str:
 
 def _fill_template(template: str, bundle: list[Listing], price_str: str) -> str:
     """Şablondaki {urun}/{Urun}/{durum}/{fiyat} alanlarını doldurur."""
-    plural = len(bundle) > 1
-    urun = "ürünler" if plural else "ürün"
-    return template.format(urun=urun, Urun=urun.capitalize(), durum=_condition_text(bundle),
+    # Tek üründe ürünün adı (ör. "Fjällräven Kanken bordo sırt çantası"), pakette "ürünler".
+    urun = "ürünler" if len(bundle) > 1 else bundle[0].title
+    return template.format(urun=urun, Urun=urun[:1].upper() + urun[1:], durum=_condition_text(bundle),
                            fiyat=f"{price_str} TL")
 
 
@@ -289,9 +290,18 @@ def _build_seller_prompt(
             "Uydurma bilgi verme; yalnızca ilandaki bilgileri kullan. En çok 2 kısa cümle yaz."
         )
     return (
-        f"Sen Dolap tarzı ikinci el bir pazar yerinde satıcısın.\n"
-        f"Ürünler senin; onlardan 'ürünlerim', 'ürün' ya da 'ürünler' diye bahset, asla 'ürünleriniz' ya da "
-        f"'ürününüz' deme. Alıcıya 'siz' diye hitap et.\n"
+        f"Sen Dolap tarzı ikinci el bir pazar yerinde tek başına satış yapan bir kişisin.\n"
+        f"Kurallar:\n"
+        f"- 'Ben' diye konuş, 'biz' deme. Alıcıya 'siz' diye hitap et.\n"
+        f"- Ürünler senin: onlardan 'ürünüm', 'çantam', 'ceketim' ya da ürün adıyla bahset; asla "
+        f"'ürünleriniz', 'çantanız', 'ceketiniz' gibi alıcıya aitmiş gibi konuşma.\n"
+        f"- Ürünün durumunu yalnızca parantezdeki durum ifadesiyle söyle; 'yeni gibi', 'hiç kullanılmamış' "
+        f"gibi farklı bir durum uydurma.\n"
+        f"- Başka bir site, uygulama ya da kargo firması adı yazma; kargo takibi, ödeme yöntemi gibi ayrıntı uydurma.\n"
+        f"- Önceki mesajlarındaki cümleleri tekrar etme, yeni bir şey söyle.\n"
+        + ("" if round is None else
+           f"- Bu {round}. tur (toplam {T_MAX}). 'Son teklif' ya da 'son fiyat' ifadesini "
+           + ("bu turda kullanabilirsin.\n" if round >= T_MAX else "kullanma, pazarlık sürüyor.\n"))
         + ("" if round is None else
            "Bu senin ilk mesajın; kısa bir selamla başlayabilirsin.\n" if round <= 1 else
            "Selamlaşma ilk mesajda yapıldı; 'Merhaba' gibi bir selamla başlama, doğrudan konuya gir.\n")
@@ -306,6 +316,77 @@ def _build_seller_prompt(
 _GREETING = re.compile(r"^\s*(merhaba(lar)?|selam(lar)?|iyi günler|iyi akşamlar)\s*[,!.]*\s*", re.IGNORECASE)
 
 
+_COMPANY_NAMES = re.compile(
+    r"\b(hepsiburada|trendyol|dolap|n11|amazon|sahibinden|letgo|gardrops|yurti[çc]i|aras kargo|mng|ptt|"
+    r"s[üu]rat|ups|dhl|getir|instagram|whatsapp)\b", re.IGNORECASE)
+_NEW_CONDITION_CLAIMS = ("yeni gibi", "yeni etiketli", "etiketi üzerinde", "hiç kullanılmamış", "yepyeni",
+                         "sıfır ayarında", "sıfır gibi")
+_SECOND_PERSON = ("nız", "niz", "nuz", "nüz")
+_GRAMMAR_FIXES = [("Siz için", "Sizin için"), ("siz için", "sizin için"), ("sizinlere", "size"),
+                  ("Sizlerin", "Sizin"), ("sizlerin", "sizin"), ("ürünlerimizin", "ürünlerimin"),
+                  ("ürünlerimizi", "ürünlerimi"), ("ürünlerimiz", "ürünlerim"), ("teklifimizi", "teklifimi"),
+                  ("teklifimiz", "teklifim"), ("rica ederiz", "rica ederim")]
+
+
+def _product_stems(bundle: list[Listing]) -> set[str]:
+    """Ürün adlarındaki isim kökleri ("çantası" -> "çanta", "ceketi" -> "ceket"); 4 harften kısa olanlar atlanır."""
+    stems = set()
+    for item in bundle:
+        for word in re.findall(r"[a-zçğıöşü]+", item.title.lower()):
+            for suffix in ("sı", "si", "su", "sü", "ı", "i", "u", "ü"):
+                if word.endswith(suffix) and len(word) - len(suffix) >= 4:
+                    word = word[: -len(suffix)]
+                    break
+            if len(word) >= 4:
+                stems.add(word)
+    return stems
+
+
+def _numbers_removed(text: str) -> str:
+    return " ".join(re.sub(r"[\d.,]+\s*(tl)?", " ", text.lower()).split())
+
+
+def seller_message_problem(message: str, bundle: list[Listing], history: list[Offer],
+                           round: int, action: str) -> str | None:
+    """Satıcı mesajında demo kalitesini bozan sorun varsa adını döndürür, yoksa None.
+
+    Kural katmanının (core/rules.py) kapsamadığı dil sorunları içindir:
+      bos          boş mesaj (ör. düşünme özellikli model metin üretemedi)
+      firma        başka site, uygulama ya da kargo firması adı
+      durum        ürünün durumu "yeni" değilken "yeni gibi" vb. iddia
+      bakis_acisi  satıcı kendi ürününden "çantanız", "ceketiniz" diye bahsediyor (kabulde serbest)
+      son_teklif   son tur değilken "son teklif / son fiyat"
+      tekrar       bir önceki satıcı mesajıyla neredeyse aynı
+    """
+    text = message.strip()
+    if not text:
+        return "bos"
+    low = text.lower()
+    if _COMPANY_NAMES.search(low):
+        return "firma"
+    if any(claim in low for claim in _NEW_CONDITION_CLAIMS) and \
+            not any("yeni" in item.condition.lower() for item in bundle):
+        return "durum"
+    if action != "accept":
+        for stem in _product_stems(bundle):
+            if re.search(rf"\b{re.escape(stem)}\w*?({'|'.join(_SECOND_PERSON)})\w*", low):
+                return "bakis_acisi"
+        if round < T_MAX and re.search(r"son (teklif|fiyat)", low):
+            return "son_teklif"
+    previous = [o.message for o in history if o.sender == "seller"]
+    if previous and difflib.SequenceMatcher(None, _numbers_removed(previous[-1]),
+                                            _numbers_removed(text)).ratio() > 0.7:
+        return "tekrar"
+    return None
+
+
+def polish_seller_message(message: str) -> str:
+    """Küçük modelin sık yaptığı dil hatalarını düzeltir ("Siz için" -> "Sizin için", "biz" -> "ben")."""
+    for wrong, right in _GRAMMAR_FIXES:
+        message = message.replace(wrong, right)
+    return message
+
+
 def strip_greeting(message: str, round_no: int) -> str:
     """2. turdan itibaren mesajın başındaki selamı kaldırır ve ilk harfi büyütür."""
     if round_no <= 1:
@@ -318,6 +399,9 @@ def strip_greeting(message: str, round_no: int) -> str:
 
 # Satıcı kendi ürününden ikinci çoğul iyelikle ("ürünleriniz") söz ederse birinci tekile çevrilir.
 # Kabul mesajında "ürünlerinizi kargoya veririm" doğru kullanım olduğu için orada uygulanmaz.
+# Kalite kontrolüne takılıp yeniden üretilen ya da şablona düşen satıcı mesajlarının sayımı (sorun -> adet).
+SELLER_QUALITY_FALLBACKS: dict[str, int] = {}
+
 _SELLER_PERSPECTIVE_FIXES = [
     ("ürünlerinizin", "ürünlerimin"), ("ürünlerinizi", "ürünlerimi"), ("ürünleriniz", "ürünlerim"),
     ("ürününüzün", "ürünümün"), ("ürününüzü", "ürünümü"), ("ürününüz", "ürünüm"),
@@ -395,7 +479,14 @@ def generate_seller_message(
             # yalnızca metin bloklarını birleştir.
             text = "".join(getattr(b, "text", "") for b in response.content
                            if getattr(b, "type", "text") == "text").strip()
-            return strip_greeting(_fix_seller_perspective(text, action), round)
+            text = polish_seller_message(strip_greeting(_fix_seller_perspective(text, action), round))
+            problem = seller_message_problem(text, bundle, history, round, action)
+            if problem is None:
+                return text
+            SELLER_QUALITY_FALLBACKS[problem] = SELLER_QUALITY_FALLBACKS.get(problem, 0) + 1
+            if attempt == 0:
+                continue  # bir kez daha üret
+            return _template_seller_message(price_str, action, tactic, bundle, round)
         except Exception:
             if attempt < LLM_MAX_RETRIES - 1:
                 time.sleep(LLM_BACKOFF_BASE * (2 ** attempt))
